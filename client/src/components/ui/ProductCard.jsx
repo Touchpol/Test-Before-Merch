@@ -5,15 +5,16 @@ const baht = (value) =>
   `฿${Number(value || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}`;
 
 // ไฟล์: client/src/components/ui/ProductCard.jsx
+// คอมโพเนนต์การ์ดแสดงรายการสินค้า (Product Card)
+// เรียกมาจาก: Home.jsx, Product.jsx, ProductDetail.jsx (Related items), ThaiHeritage.jsx, PopCulture.jsx
+// รับข้อมูลผ่าน: prop product (อิงตามโครงสร้างใน src/data/product.js) และฟังก์ชัน onAddToCart
 export default function ProductCard({
   product,
   onAddToCart,
-  fluid = false,
-  compact = false,
+  fluid = false, // ให้ยืดเต็มความกว้าง 100% ตาม container พ่อ
+  compact = false, // ซ่อนปุ่ม Add to Cart (เหมาะกับหน้าแสดงแบบกระชับ)
 }) {
   if (!product) return null;
-
-  const imgSrc = product.image || product.imageUrl || '';
 
   return (
     <div
@@ -22,12 +23,12 @@ export default function ProductCard({
       }`}
     >
       <Link
-        to={`/productDetail/${product.id || product._id}`}
+        to={`/productDetail/${product.id}`}
         className="relative block aspect-[4/3] w-full overflow-hidden rounded-btn bg-cream sm:aspect-square"
       >
-        {imgSrc ? (
+        {product.image ? (
           <img
-            src={imgSrc}
+            src={product.image}
             alt={product.name}
             loading="lazy"
             className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
@@ -46,7 +47,7 @@ export default function ProductCard({
           </p>
         )}
         <Link
-          to={`/productDetail/${product.id || product._id}`}
+          to={`/productDetail/${product.id}`}
           className="mt-1 line-clamp-2 text-xs sm:text-sm font-semibold text-ink transition hover:text-primary"
           title={product.name}
         >

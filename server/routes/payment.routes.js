@@ -1,13 +1,9 @@
 const express = require('express');
-const { authUser } = require('../middleware/auth');
-const { adminOnly } = require('../middleware/adminOnly');
+const { optionalAuth } = require('../middleware/auth');
 const controller = require('../controllers/payment.controller');
-
 const router = express.Router();
 
-router.post('/orders/:orderId/initiate', authUser, controller.initiatePayment);
-router.get('/orders/:orderId', authUser, controller.getPaymentStatus);
-router.post('/webhook', controller.webhook);
-router.post('/:paymentId/refund', authUser, adminOnly, controller.refundPayment);
+router.post('/charge', optionalAuth, controller.createCharge);
+router.get('/:orderId', optionalAuth, controller.getPaymentByOrder);
 
 module.exports = router;

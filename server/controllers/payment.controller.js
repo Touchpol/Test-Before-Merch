@@ -1,81 +1,80 @@
-const Payment = require('../models/Payment');
+const omise = require('omise')({
+  secretKey: process.env.OMISE_SECRET_KEY,
+  omiseVersion: '2019-05-29',
+});
+
 const Order = require('../models/Order');
+const Payment = require('../models/Payment');
 
-exports.initiatePayment = async (req, res, next) => {
+exports.createCharge = async (req, res, next) => {
   try {
-    const { orderId } = req.params;
-    const { method = 'PromptPay' } = req.body;
-    const order = await Order.findById(orderId);
-    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+    const { token, orderId, amount } = req.body;
+    if (!token) return res.status(400).json({ success: false, message: 'Omise card token is required' });
 
-    let payment = await Payment.findOne({ orderId });
-    if (!payment) {
-      payment = await Payment.create({
-        orderId,
-        amount: order.totalAmount,
-        method,
-        status: 'pending'
-      });
+    const bahtAmount = Math.round(Number(amount));
+    if (!Number.isFinite(bahtAmount) || bahtAmount < 20) {
+      return res.status(400).json({ success: false, message: 'Amount must be at least 20 THB' });
     }
 
-    res.json({
+    let order = null;
+    if (orderId) {
+      order = await Order.findById(orderId);
+      if (order && req.user && String(order.userId) !== String(req.user._id)) {
+        return res.status(403).json({ success: false, message: 'You cannot pay for this order' });
+      }
+    }
+
+    const charge = await omise.charges.create({
+      amount: bahtAmount * 100,
+      currency: 'thb',
+      card: token,
+      description: `Merchroom order ${orderId || 'test-payment'}`,
+    });
+
+    let payment = null;
+    if (order) {
+      const brand = charge.card ? ` (${charge.card.brand})` : '';
+      payment = await Payment.findOneAndUpdate(
+        { orderId: order._id },
+        {
+          $set: {
+            amount: charge.amount,
+            method: `card${brand}`,
+            status: charge.paid ? 'paid' : 'failed',
+            transactionId: charge.id,
+          },
+        },
+        { new: true, runValidators: true },
+      );
+    }
+
+    return res.json({
       success: true,
-      message: 'Payment intent created / PromptPay QR generated',
+      charge: {
+        id: charge.id,
+        status: charge.status,
+        paid: charge.paid,
+        amount: charge.amount,
+        currency: charge.currency,
+        failureCode: charge.failure_code || null,
+        failureMessage: charge.failure_message || null,
+      },
       payment,
-      qrCodeUrl: `https://api.promptpay.io/qr/${order.totalAmount}?ref=${order._id}`
     });
   } catch (error) {
-    next(error);
+    return res.status(400).json({
+      success: false,
+      message: error.message || 'Payment failed',
+      code: error.code || null,
+    });
   }
 };
 
-exports.getPaymentStatus = async (req, res, next) => {
+exports.getPaymentByOrder = async (req, res, next) => {
   try {
-    const { orderId } = req.params;
-    const payment = await Payment.findOne({ orderId });
+    const payment = await Payment.findOne({ orderId: req.params.orderId });
     if (!payment) return res.status(404).json({ success: false, message: 'Payment not found' });
-    res.json({ success: true, payment });
-  } catch (error) {
-    next(error);
-  }
-};
-
-exports.webhook = async (req, res, next) => {
-  try {
-    const { orderId, paymentId, status = 'paid' } = req.body;
-    let payment = null;
-    if (paymentId) {
-      payment = await Payment.findById(paymentId);
-    } else if (orderId) {
-      payment = await Payment.findOne({ orderId });
-    }
-
-    if (!payment) return res.status(404).json({ success: false, message: 'Payment not found' });
-
-    payment.status = status;
-    await payment.save();
-
-    if (status === 'paid') {
-      await Order.findByIdAndUpdate(payment.orderId, { status: 'processing' });
-    }
-
-    res.json({ success: true, message: 'Webhook processed successfully', payment });
-  } catch (error) {
-    next(error);
-  }
-};
-
-exports.refundPayment = async (req, res, next) => {
-  try {
-    const { paymentId } = req.params;
-    const payment = await Payment.findById(paymentId);
-    if (!payment) return res.status(404).json({ success: false, message: 'Payment not found' });
-
-    payment.status = 'refunded';
-    await payment.save();
-    await Order.findByIdAndUpdate(payment.orderId, { status: 'cancelled' });
-
-    res.json({ success: true, message: 'Refund processed successfully', payment });
+    return res.json({ success: true, payment });
   } catch (error) {
     next(error);
   }

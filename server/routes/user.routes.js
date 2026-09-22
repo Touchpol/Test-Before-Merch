@@ -7,5 +7,4 @@ router.get('/', authUser, adminOnly, controller.listCustomers);
 router.get('/profile', authUser, controller.getProfile);
 router.patch('/profile', authUser, controller.updateProfile);
 router.patch('/me', authUser, controller.updateMe);
-router.get('/:id', authUser, adminOnly, controller.getUserById);
 module.exports = router;

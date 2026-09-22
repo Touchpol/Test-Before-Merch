@@ -1,40 +1,64 @@
 // ไฟล์: client/pages/Product.jsx
 
+// 1. นำเข้าเครื่องมือ (Tools & Hooks) จาก React และ Library ต่างๆ
+// - useState: ตัวสร้าง "กล่องจำค่า" (State) ถ้าค่าเปลี่ยน หน้าเว็บจะเปลี่ยนตามอัตโนมัติ
+// - useEffect: ตัวสั่งการให้ทำอะไรบางอย่างเมื่อเกิดเหตุการณ์ เช่น การคลิกข้างนอกเพื่อปิดเมนู
+// - useMemo: ตัวช่วยจำผลลัพธ์การคำนวณ เช่น การกรองสินค้า เพื่อไม่ต้องคำนวณใหม่ซ้ำๆ ให้เว็บช้า
+// - useRef: ตัวช่วยอ้างอิงตำแหน่งองค์ประกอบบนหน้าเว็บ เช่น ช่องค้นหา หรือปุ่ม Dropdown
 import { useEffect, useMemo, useRef, useState } from 'react';
+
+// นำเข้าตัวอ่าน URL Search Parameters (เช่น ?cat=... หรือ ?q=...)
 import { useSearchParams } from 'react-router-dom';
+
+// นำเข้าไอคอนจาก Lucide React
 import { ChevronDown, Flag, Search, X } from 'lucide-react';
 
-import { getPublicProducts } from '../src/api/products.api';
-import { products as fallbackProducts } from '../src/data/product';
+// นำเข้าข้อมูล Mock Data สินค้า และตัวเชื่อม Context ตระกร้าสินค้า
+import { products } from '../src/data/product';
 import { categoryFilter } from '../src/data/sections';
 import { useCart } from '../src/context/CartContext';
 
+// นำเข้า Components ย่อยมาประกอบกัน
 import Container from '../src/components/ui/Container';
 import ProductCard from '../src/components/ui/ProductCard';
 import Breadcrumb from '../src/components/ui/Breadcrumb';
 
+// กำหนดจำนวนสินค้าที่จะแสดงต่อ 1 หน้า (Pagination)
 const PER_PAGE = 8;
 
-const CATEGORY_SUFFIX = { 'Thai Band': 'th', 'Pop Culture': 'en', 'Thai Heritage': 'hr', Artist: null };
+// กำหนดเงื่อนไขแมปหมวดหมู่กับรหัสลงท้าย ID สินค้า (เช่น ID ลงท้ายด้วย 'th' = สินค้าไทย)
+const CATEGORY_SUFFIX = { 'Thai Band': 'th', 'Pop Culture': 'en', Movie: 'en', 'Thai Heritage': 'hr', Artist: null };
 const CATEGORY_OPTIONS = ['All', ...Object.keys(CATEGORY_SUFFIX)];
 const PRICE_OPTIONS = ['All', '< ฿1,000', '฿1,000 - ฿3,000', '> ฿3,000'];
 const SIZE_OPTIONS = ['All', 'S', 'M', 'L', 'XL'];
 const STATUS_OPTIONS = ['All', 'In stock', 'Pre-order', 'Limited'];
 const COLLECTION_OPTIONS = ['All', 'Concert', 'Album', 'Character', 'Handicraft'];
 
+// ดึงรายชื่อแบรนด์ทั้งหมดจากรายการสินค้าโดยไม่ให้ซ้ำกัน
+const BRANDS = [...new Set(products.map((product) => product.brand).filter(Boolean))];
+const ARTIST_OPTIONS = ['All', ...BRANDS];
 const NATIONAL_OPTIONS = ['All', 'Thailand', 'International'];
 const STYLE_OPTIONS = ['All', 'Illustration', 'Photo', 'Typography'];
 const MEDIUM_OPTIONS = ['All', 'T-Shirt', 'Vinyl', 'Accessories', 'Home & Living'];
 const SORT_OPTIONS = ['Famous', 'Price: Low to High', 'Price: High to Low'];
 
 
+/* Component ย่อย: Dropdown (ปุ่มเมนูเลือกตัวเลือก)
+   - หน้าที่: รับตัวเลือก (options) และค่าปัจจุบัน (value) แล้วแสดงเมนูแบบยืดขยายได้
+   - การเชื่อมโยง: เมื่อเลือกตัวเลือก จะส่งค่านั้นกลับไปที่ Component หลักผ่าน onChange()
+*/
 function Dropdown({ label, value, options, onChange }) {
+  // สร้าง State ควบคุมการเปิด-ปิด ตัวเมนู
   const [open, setOpen] = useState(false);
+  
+  // สร้างการอ้างอิงตำแหน่งกล่อง Dropdown
   const ref = useRef(null);
 
+  // useEffect สำหรับตรวจจับการคลิก "ข้างนอกกล่อง" หรือการกดปุ่ม ESC เพื่อปิดเมนูอัตโนมัติ
   useEffect(() => {
     if (!open) return;
     const handleClick = (e) => {
+      // ถ้าจุดที่คลิกไม่ได้อยู่ในกล่อง Dropdown ให้สั่งปิด (setOpen(false))
       if (ref.current && !ref.current.contains(e.target)) setOpen(false);
     };
     const handleKey = (e) => {
@@ -43,6 +67,7 @@ function Dropdown({ label, value, options, onChange }) {
     document.addEventListener('mousedown', handleClick);
     document.addEventListener('keydown', handleKey);
     
+    // คืนค่าฟังก์ชันทำความสะอาด Event เพื่อไม่ให้เมมโมรี่รั่วไหล
     return () => {
       document.removeEventListener('mousedown', handleClick);
       document.removeEventListener('keydown', handleKey);
@@ -51,6 +76,7 @@ function Dropdown({ label, value, options, onChange }) {
 
   return (
     <div ref={ref} className="relative">
+      {/* ปุ่มกดเปิด/ปิด Dropdown */}
       <button
         type="button"
         onClick={() => setOpen(!open)}
@@ -63,6 +89,7 @@ function Dropdown({ label, value, options, onChange }) {
         <ChevronDown className="size-4 shrink-0 text-muted" aria-hidden="true" />
       </button>
 
+      {/* เมนูตัวเลือก จะปรากฏขึ้นเมื่อ open === true เท่านั้น */}
       {open && (
         <div className="absolute left-0 top-14 z-50 w-48 rounded-[9px] border border-[#A5A5A5]/20 bg-white p-2 shadow-card">
           {options.map((option) => (
@@ -70,8 +97,8 @@ function Dropdown({ label, value, options, onChange }) {
               key={option}
               type="button"
               onClick={() => {
-                onChange(option);
-                setOpen(false);
+                onChange(option); // ส่งค่าที่เลือกกลับไปให้ State ของแม่
+                setOpen(false);   // เลือกเสร็จแล้วปิดเมนู
               }}
               className={`block w-full rounded-btn px-3 py-2 text-left text-sm transition hover:bg-cream ${
                 option === value ? 'font-semibold text-primary' : 'text-ink'
@@ -87,66 +114,37 @@ function Dropdown({ label, value, options, onChange }) {
 }
 
 
+/* Component หลัก: Products (หน้าแสดงสินค้าและระบบกรองทั้งหมด) */
 export default function Products() {
+  // ดึงฟังก์ชันเพิ่มสินค้าเข้าตะกร้าจาก Context กลาง
   const { addToCart } = useCart();
+
+  // อ่าน Query Parameter จาก URL (เช่น ?cat=... หรือ ?q=...)
   const [searchParams, setSearchParams] = useSearchParams();
   const cat = searchParams.get('cat');
   const q = searchParams.get('q') ?? '';
 
+  // แปลงค่า cat จาก URL มาเป็นชื่อหมวดหมู่ทันทีตั้งแต่ตอนเริ่มโหลดหน้าเว็บ
   const initialCategory = cat ? (categoryFilter[cat]?.label ?? 'All') : 'All';
 
-  const [products, setProducts] = useState(fallbackProducts);
-  const [loading, setLoading] = useState(false);
-
-  const [query, setQuery] = useState(q);
-  const [category, setCategory] = useState(initialCategory);
-  const [price, setPrice] = useState('All');
-  const [size, setSize] = useState('All');
-  const [status, setStatus] = useState('All');
-  const [collection, setCollection] = useState('All');
+  /* กลุ่ม State (กล่องเก็บข้อมูล): ทำหน้าที่เก็บสถานะปัจจุบันของการกรองทั้งหมด */
+  const [query, setQuery] = useState(q);            // ข้อความค้นหา
+  const [category, setCategory] = useState(initialCategory); // หมวดหมู่ (ตั้งค่าตาม URL ทันที)
+  const [price, setPrice] = useState('All');        // ช่วงราคา
+  const [size, setSize] = useState('All');          // ไซส์
+  const [status, setStatus] = useState('All');      // สถานะสินค้า
+  const [collection, setCollection] = useState('All');// คอลเลกชัน
   
-  const [artist, setArtist] = useState('All');
-  const [national, setNational] = useState('All');
-  const [style, setStyle] = useState('All');
-  const [medium, setMedium] = useState('All');
-  const [thaiOnly, setThaiOnly] = useState(false);
+  const [artist, setArtist] = useState('All');      // ศิลปิน
+  const [national, setNational] = useState('All');  // สัญชาติ
+  const [style, setStyle] = useState('All');        // สไตล์งาน
+  const [medium, setMedium] = useState('All');      // ประเภทสื่อ
+  const [thaiOnly, setThaiOnly] = useState(false);  // สวิตช์เฉพาะศิลปินไทย
 
-  const [sort, setSort] = useState('Famous');
-  const [page, setPage] = useState(1);
+  const [sort, setSort] = useState('Famous');       // การเรียงลำดับ (น้อย-มาก)
+  const [page, setPage] = useState(1);              // หน้า Pagination ปัจจุบัน
 
-  // Fetch products from database API with fallback to mock data & mapped images
-  useEffect(() => {
-    setLoading(true);
-    getPublicProducts({ limit: 200 })
-      .then((res) => {
-        if (res.success && Array.isArray(res.products) && res.products.length > 0) {
-          const mapped = res.products.map((p, idx) => {
-            const fallback = fallbackProducts.find(f => f.name.toLowerCase() === p.name.toLowerCase()) || fallbackProducts[idx % fallbackProducts.length];
-            const imgSrc = (p.imageUrl && p.imageUrl.length > 5) ? p.imageUrl : fallback?.image;
-            return {
-              ...p,
-              id: p._id || p.id,
-              brand: p.brand || p.artist?.name || fallback?.brand || 'Merchroom',
-              image: imgSrc,
-              imageUrl: imgSrc,
-              national: p.national || fallback?.national || 'Thailand',
-              style: p.style || fallback?.style || 'Illustration',
-              medium: p.medium || fallback?.medium || 'Accessories',
-              sizes: p.sizes?.length ? p.sizes : (fallback?.sizes || []),
-            };
-          });
-          setProducts(mapped);
-        }
-      })
-      .catch(() => {
-        setProducts(fallbackProducts);
-      })
-      .finally(() => setLoading(false));
-  }, []);
-
-  const BRANDS = useMemo(() => [...new Set(products.map((product) => product.brand).filter(Boolean))], [products]);
-  const ARTIST_OPTIONS = useMemo(() => ['All', ...BRANDS], [BRANDS]);
-
+  /* การซิงค์ข้อมูลเมื่อ URL เปลี่ยนแปลง (เช่น ผู้ใช้กดลิงก์มาจาก Navbar หรือหมวดหมู่อื่น) */
   useEffect(() => {
     const newCategory = cat ? (categoryFilter[cat]?.label ?? 'All') : 'All';
     setCategory(newCategory);
@@ -158,103 +156,43 @@ export default function Products() {
     setPage(1);
   }, [q]);
 
+  /* หัวใจหลักของการกรองสินค้า (Filtering Engine):
+     - useMemo จะทำงานคำนวณใหม่เฉพาะเมื่อ State ตัวกรองตัวใดตัวหนึ่งเปลี่ยน */
   const filtered = useMemo(() => {
+    const suffix = category !== 'All' ? CATEGORY_SUFFIX[category] : null;
+
+    // นำ Array สินค้าทั้งหมดมาผ่านฟังก์ชัน .filter() ตามเงื่อนไขทุกข้อ
     let result = products.filter((product) => {
-      // 0. Category filter
-      if (category !== 'All') {
-        const brand = (product.brand || '').toUpperCase();
-        const isThaiHeritage = brand === 'SACIT' || brand === 'CHAKSARN' || product.tags?.includes('heritage') || product.tags?.includes('craft') || String(product.id).endsWith('hr');
-        const isThaiBand = (product.national?.toLowerCase() === 'thailand' || product.tags?.some(t => t.toLowerCase() === 'thailand') || String(product.id).endsWith('th')) && !isThaiHeritage;
-        const isPopCulture = product.national?.toLowerCase() === 'international' || String(product.id).endsWith('en') || ['TAYLOR SWIFT', 'JUSTIN BIEBER', 'LINKIN PARK', 'BILLIE EILISH', 'A7X'].includes(brand);
-        const isArtistMerch = isThaiBand || isPopCulture;
-
-        if (category === 'Thai Band' && !isThaiBand) return false;
-        if (category === 'Pop Culture' && !isPopCulture) return false;
-        if (category === 'Thai Heritage' && !isThaiHeritage) return false;
-        if (category === 'Artist' && !isArtistMerch) return false;
-      }
-
-      // 1. Thai Artist Only toggle (Exclude Thai Heritage handicraft brands like SACIT, CHAKSARN)
-      if (thaiOnly) {
-        const brand = (product.brand || '').toUpperCase();
-        const isThaiHeritage = brand === 'SACIT' || brand === 'CHAKSARN' || product.tags?.includes('heritage') || product.tags?.includes('craft');
-        const isThai = (product.national?.toLowerCase() === 'thailand' || product.tags?.some(t => t.toLowerCase() === 'thailand')) && !isThaiHeritage;
-        if (!isThai) return false;
-      }
-
-      // 2. Artist / Company filter
-      if (artist !== 'All' && product.brand !== artist && product.artist?.name !== artist) {
-        return false;
-      }
-
-      // 3. National filter
-      if (national !== 'All') {
-        const nat = national.toLowerCase();
-        const pNat = (product.national || '').toLowerCase();
-        const hasTag = product.tags?.some(t => t.toLowerCase() === nat);
-        if (pNat !== nat && !hasTag) return false;
-      }
-
-      // 4. Style filter
-      if (style !== 'All') {
-        const st = style.toLowerCase();
-        const pSt = (product.style || '').toLowerCase();
-        const hasTag = product.tags?.some(t => t.toLowerCase() === st);
-        if (pSt !== st && !hasTag) return false;
-      }
-
-      // 5. Medium filter
-      if (medium !== 'All') {
-        const med = medium.toLowerCase();
-        const pMed = (product.medium || '').toLowerCase();
-        const hasTag = product.tags?.some(t => t.toLowerCase() === med || t.toLowerCase() === med.replace(/\s+/g, ''));
-        if (pMed !== med && !hasTag) return false;
-      }
-
-      // 6. Collection filter
-      if (collection !== 'All') {
-        const col = collection.toLowerCase();
-        const text = `${product.name} ${product.description} ${product.tags?.join(' ')}`.toLowerCase();
-        if (!text.includes(col)) return false;
-      }
-
-      // 7. Status filter
-      if (status !== 'All') {
-        if (status === 'In stock' && (product.quantity === undefined || product.quantity <= 0)) return false;
-        if (status === 'Pre-order' && !product.description?.toLowerCase().includes('pre') && !product.tags?.includes('pre-order')) return false;
-        if (status === 'Limited' && !product.description?.toLowerCase().includes('limited') && !product.tags?.includes('limited') && !product.tags?.includes('collectible')) return false;
-      }
-
-      // 8. Price filter
+      if (suffix && !product.id.endsWith(suffix)) return false;
+      if (thaiOnly && !product.id.endsWith('th')) return false;
+      if (artist !== 'All' && product.brand !== artist) return false;
       if (price === '< ฿1,000' && product.price >= 1000) return false;
       if (price === '฿1,000 - ฿3,000' && (product.price < 1000 || product.price > 3000)) return false;
       if (price === '> ฿3,000' && product.price <= 3000) return false;
       
-      // 9. Size filter
-      if (size !== 'All') {
-        const sz = size.toUpperCase();
-        const hasSize = product.sizes?.map(s => s.toUpperCase()).includes(sz) || product.tags?.map(t => t.toUpperCase()).includes(sz);
-        if (!hasSize) return false;
-      }
+      // กรองตามไซส์
+      if (size !== 'All' && Array.isArray(product.sizes) && !product.sizes.includes(size)) return false;
 
-      // 10. Search query
-      if (query) {
-        const text = `${product.name} ${product.brand} ${product.description} ${product.tags?.join(' ')}`.toLowerCase();
-        if (!text.includes(query.toLowerCase())) return false;
-      }
+      // ค้นหาคำจาก ชื่อ, แบรนด์, คำอธิบาย
+      const text = `${product.name} ${product.brand} ${product.description}`.toLowerCase();
+      if (query && !text.includes(query.toLowerCase())) return false;
       
-      return true;
+      return true; // ถ้าผ่านทุกเงื่อนไข จะเก็บสินค้านี้ไว้
     });
 
+    // เรียงลำดับราคาตามตัวเลือก sort
     if (sort === 'Price: Low to High') result = [...result].sort((a, b) => a.price - b.price);
     if (sort === 'Price: High to Low') result = [...result].sort((a, b) => b.price - a.price);
     
     return result;
-  }, [products, category, thaiOnly, artist, national, style, medium, collection, status, price, size, query, sort]);
+  }, [category, thaiOnly, artist, price, size, query, sort]);
 
+  /* คำนวณการแบ่งหน้า (Pagination) */
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  // ดึงเฉพาะสินค้าของ "หน้าที่กำลังดูอยู่" ออกมาแสดง
   const pageItems = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
+  /* ระบบ Filter Chips (ป้ายแท็กสีดำเตือนความจำว่าเลือกอะไรไปบ้าง) */
   const chips = [];
   if (category !== 'All') {
     chips.push({
@@ -279,6 +217,7 @@ export default function Products() {
   if (medium !== 'All') chips.push({ label: medium, clear: () => setMedium('All') });
   if (thaiOnly) chips.push({ label: 'Thai artist', clear: () => setThaiOnly(false) });
 
+  // ฟังก์ชันล้างค่าตัวกรองทั้งหมดเป็นค่าเริ่มต้น
   const clearAll = () => {
     setCategory('All');
     setPrice('All');
@@ -300,6 +239,7 @@ export default function Products() {
   const searchRef = useRef(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
+  /* คำนวณคำแนะนำการค้นหาอัตโนมัติ (Search Auto-suggestions) */
   const suggestions = useMemo(() => {
     if (!query.trim()) return [];
     const q = query.toLowerCase();
@@ -314,11 +254,12 @@ export default function Products() {
           results.push({ name: p.name, brand: p.brand });
         }
       }
-      if (results.length >= 6) break;
+      if (results.length >= 6) break; // เอาสูงสุดแค่ 6 รายการ
     }
     return results;
-  }, [query, products]);
+  }, [query]);
 
+  // ปิดช่อง Suggestion เมื่อคลิกที่อื่นบนหน้าจอ
   useEffect(() => {
     if (!showSuggestions) return;
     const handleClick = (e) => {
@@ -335,12 +276,15 @@ export default function Products() {
     };
   }, [showSuggestions]);
 
+  /* ส่วนการแสดงผล */
   return (
     <Container className="py-8">
+      {/* แถบนิวอิเกตบอกตำแหน่งหน้าปัจจุบัน */}
       <Breadcrumb
         items={[{ label: 'Home', to: '/' }, { label: 'Shop', to: '/products' }, { label: filterLabel }]}
       />
 
+      {/* 1. ช่องค้นหา (Search Bar) สูง 64px ทรง แคปซูล */}
       <div ref={searchRef} className="relative mt-6">
         <form
           role="search"
@@ -355,9 +299,9 @@ export default function Products() {
             type="search"
             value={query}
             onChange={(e) => {
-              setQuery(e.target.value);
-              setPage(1);
-              setShowSuggestions(true);
+              setQuery(e.target.value);     // อัปเดตข้อความค้นหา
+              setPage(1);                   // เด้งกลับไปหน้า 1
+              setShowSuggestions(true);     // เปิดกล่องคำแนะนำ
             }}
             onFocus={() => { if (query.trim()) setShowSuggestions(true); }}
             placeholder="Search for products..."
@@ -368,6 +312,7 @@ export default function Products() {
           />
         </form>
 
+        {/* เมนูแสดงคำแนะนำการค้นหาแบบ Dropdown */}
         {showSuggestions && suggestions.length > 0 && (
           <ul className="absolute left-0 top-full z-50 mt-2 w-full rounded-[18px] border border-[#A5A5A5]/20 bg-white p-2 shadow-card" role="listbox">
             {suggestions.map((s) => (
@@ -392,6 +337,7 @@ export default function Products() {
         )}
       </div>
 
+      {/* หัวข้อหน้าแสดงสินค้า */}
       <div className="mt-8 border-b border-[#A5A5A5]/30 pb-2">
         <div className="flex w-[80px] flex-col items-center gap-1.5">
           <span className="text-base font-semibold text-violet">Product</span>
@@ -399,7 +345,9 @@ export default function Products() {
         </div>
       </div>
 
+      {/* 2. กล่องควบคุม Filter Panel */}
       <div className="relative mt-6 rounded-[18px] border border-[#A5A5A5] bg-white px-[80px] py-[40px] shadow-none">
+        {/* แถวที่ 1: หมวดสินค้าทั่วไป */}
         <div className="relative z-20">
           <p className="text-xs font-normal text-muted">Sort by Product</p>
           <div className="mt-3 flex flex-wrap gap-[10px]">
@@ -432,6 +380,7 @@ export default function Products() {
           </div>
         </div>
 
+        {/* แถวที่ 2: หมวดศิลปินและวัฒนธรรม */}
         <div className="relative z-10 mt-[25px]">
           <p className="text-xs font-normal text-muted">Sort By Artist and Culture</p>
           <div className="mt-3 flex flex-wrap items-center gap-[10px]">
@@ -440,6 +389,7 @@ export default function Products() {
             <Dropdown label="Style" value={style} options={STYLE_OPTIONS} onChange={(v) => { setStyle(v); setPage(1); }} />
             <Dropdown label="Medium" value={medium} options={MEDIUM_OPTIONS} onChange={(v) => { setMedium(v); setPage(1); }} />
 
+            {/* ปุ่มสวิตช์เลือกเฉพาะศิลปินไทย */}
             <button
               type="button"
               onClick={() => {
@@ -460,7 +410,9 @@ export default function Products() {
         </div>
       </div>
 
+      {/* 3. แถบแสดง Active Filter Chips + ปุ่ม Clear All และ Sort By ด้านขวา */}
       <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
+        {/* แสดงป้ายแท็ก (Chips) ของฟิลเตอร์ที่กำลังใช้งาน */}
         <div className="flex flex-wrap items-center gap-3">
           {chips.map((chip) => (
             <button
@@ -476,6 +428,7 @@ export default function Products() {
           ))}
         </div>
 
+        {/* ส่วนขวา: ปุ่ม Clear All และ Dropdown เรียงลำดับ */}
         <div className="ml-auto flex items-center gap-6">
           {chips.length > 0 && (
             <button
@@ -491,21 +444,22 @@ export default function Products() {
         </div>
       </div>
 
+      {/* 4. ตารางแสดงรายการสินค้า (Grid 4 คอลัมน์) */}
       <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
-        {loading && (
-          <p className="col-span-full py-16 text-center text-muted">Loading products...</p>
-        )}
-        {!loading && pageItems.map((product) => (
+        {/* วนลูปนำรายการสินค้าจาก pageItems มาแสดงผลทีละชิ้นผ่าน ProductCard */}
+        {pageItems.map((product) => (
           <ProductCard key={product.id} product={product} onAddToCart={addToCart} fluid />
         ))}
         
-        {!loading && pageItems.length === 0 && (
+        {/* กรณีค้นหาแล้วไม่พบสินค้าเลย */}
+        {pageItems.length === 0 && (
           <p className="col-span-full py-16 text-center text-muted">
-            ไม่พบสินค้าที่ตรงกับ filter — ลองปรับตัวเลือกดูนะ
+            ไม่พบสินค้าที่ตรงกับ filter — ลองดึงตัวเลือกออกดูนะ
           </p>
         )}
       </div>
 
+      {/* 5. ปุ่มเปลี่ยนหน้า (Pagination Controls) */}
       {totalPages > 1 && (
         <nav className="mt-10 flex items-center justify-center gap-2" aria-label="แบ่งหน้าสินค้า">
           {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((num) => (

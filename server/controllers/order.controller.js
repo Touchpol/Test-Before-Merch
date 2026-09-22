@@ -2,7 +2,7 @@ const Order = require('../models/Order');
 const Payment = require('../models/Payment');
 const User = require('../models/User');
 const Product = require('../models/Product');
-const ORDER_STATUSES = ['pending', 'processing', 'shipped', 'completed', 'cancelled', 'in_transit', 'delivered'];
+const ORDER_STATUSES = ['pending', 'processing', 'shipped', 'completed', 'cancelled'];
 
 async function attachPayments(orders) {
   const payments = await Payment.find({ orderId: { $in: orders.map((order) => order._id) } }).sort({ createdAt: -1 });
@@ -28,18 +28,16 @@ exports.getAllOrders = async (req, res, next) => {
     res.json({ success: true, orders: await attachPayments(orders), pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
   } catch (error) { next(error); }
 };
-
 exports.getOrderStats = async (req, res, next) => {
   try {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const paidOrderIds = await Payment.distinct('orderId', { status: 'paid' });
     const [todayOrders, pendingPayment, awaitingFulfillment, shipped] = await Promise.all([
-      Order.countDocuments({ $or: [{ purchaseDate: { $gte: today } }, { createdAt: { $gte: today } }] }), Payment.countDocuments({ status: 'pending' }), Order.countDocuments({ _id: { $in: paidOrderIds }, status: { $in: ['pending', 'processing'] } }), Order.countDocuments({ status: { $in: ['shipped', 'completed', 'in_transit', 'delivered'] } }),
+      Order.countDocuments({ $or: [{ purchaseDate: { $gte: today } }, { createdAt: { $gte: today } }] }), Payment.countDocuments({ status: 'pending' }), Order.countDocuments({ _id: { $in: paidOrderIds }, status: { $in: ['pending', 'processing'] } }), Order.countDocuments({ status: { $in: ['shipped', 'completed'] } }),
     ]);
     res.json({ success: true, stats: { todayOrders, pendingPayment, awaitingFulfillment, shipped } });
   } catch (error) { next(error); }
 };
-
 exports.createOrder = async (req, res, next) => {
   try {
     const { items, shippingAddress, shippingProvider = 'Standard Delivery', paymentMethod = 'PromptPay' } = req.body;
@@ -48,9 +46,8 @@ exports.createOrder = async (req, res, next) => {
     const snapshots = [];
     for (const item of items) {
       const quantity = Number(item.quantity);
-      const productId = item.productId || item.id;
-      if (!productId || !Number.isInteger(quantity) || quantity < 1) return res.status(400).json({ success: false, message: 'Each item requires a productId and valid quantity' });
-      const product = await Product.findById(productId);
+      if (!item.productId || !Number.isInteger(quantity) || quantity < 1) return res.status(400).json({ success: false, message: 'Each item requires a productId and valid quantity' });
+      const product = await Product.findById(item.productId);
       if (!product) return res.status(404).json({ success: false, message: 'A product in this order no longer exists' });
       if (product.quantity < quantity) return res.status(409).json({ success: false, message: `${product.name} does not have enough stock` });
       snapshots.push({ productId: product._id, name: product.name, price: product.price, quantity });
@@ -64,59 +61,6 @@ exports.createOrder = async (req, res, next) => {
     } catch (error) { await Order.findByIdAndDelete(order._id); throw error; }
   } catch (error) { next(error); }
 };
-
-exports.getMyOrders = async (req, res, next) => {
-  try {
-    const orders = await Order.find({ userId: req.user._id }).sort({ purchaseDate: -1, createdAt: -1 });
-    res.json({ success: true, orders: await attachPayments(orders) });
-  } catch (error) { next(error); }
-};
-
-exports.getOrderById = async (req, res, next) => {
-  try {
-    const order = await Order.findById(req.params.id).populate('userId', 'firstName lastName phone address');
-    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
-    const user = await User.findById(req.user._id).select('role');
-    if (!user || (user.role !== 'admin' && String(order.userId._id) !== String(req.user._id))) {
-      return res.status(403).json({ success: false, message: 'You cannot access this order' });
-    }
-    res.json({ success: true, order: (await attachPayments([order]))[0] });
-  } catch (error) { next(error); }
-};
-
-exports.updateStatus = async (req, res, next) => {
-  try {
-    const { status } = req.body;
-    if (!ORDER_STATUSES.includes(status)) return res.status(400).json({ success: false, message: `Status must be one of: ${ORDER_STATUSES.join(', ')}` });
-    const order = await Order.findByIdAndUpdate(req.params.id, { status }, { new: true, runValidators: true }).populate('userId', 'firstName lastName phone address');
-    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
-    res.json({ success: true, order: (await attachPayments([order]))[0] });
-  } catch (error) { next(error); }
-};
-
-exports.cancelOrder = async (req, res, next) => {
-  try {
-    const order = await Order.findById(req.params.id);
-    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
-
-    const user = await User.findById(req.user._id).select('role');
-    if (!user || (user.role !== 'admin' && String(order.userId) !== String(req.user._id))) {
-      return res.status(403).json({ success: false, message: 'Permission denied' });
-    }
-
-    if (!['pending', 'processing'].includes(order.status)) {
-      return res.status(400).json({ success: false, message: 'Order cannot be cancelled in current status' });
-    }
-
-    order.status = 'cancelled';
-    for (const item of order.items) {
-      if (item.productId && item.quantity) {
-        await Product.findByIdAndUpdate(item.productId, { $inc: { quantity: item.quantity } });
-      }
-    }
-    await order.save();
-    res.json({ success: true, order: (await attachPayments([order]))[0] });
-  } catch (error) {
-    next(error);
-  }
-};
+exports.getMyOrders = async (req, res, next) => { try { const orders = await Order.find({ userId: req.user._id }).sort({ purchaseDate: -1, createdAt: -1 }); res.json({ success: true, orders: await attachPayments(orders) }); } catch (error) { next(error); } };
+exports.getOrderById = async (req, res, next) => { try { const order = await Order.findById(req.params.id).populate('userId', 'firstName lastName phone address'); if (!order) return res.status(404).json({ success: false, message: 'Order not found' }); const user = await User.findById(req.user._id).select('role'); if (!user || (user.role !== 'admin' && String(order.userId._id) !== String(req.user._id))) return res.status(403).json({ success: false, message: 'You cannot access this order' }); res.json({ success: true, order: (await attachPayments([order]))[0] }); } catch (error) { next(error); } };
+exports.updateStatus = async (req, res, next) => { try { const { status } = req.body; if (!ORDER_STATUSES.includes(status)) return res.status(400).json({ success: false, message: `Status must be one of: ${ORDER_STATUSES.join(', ')}` }); const order = await Order.findByIdAndUpdate(req.params.id, { status }, { new: true, runValidators: true }).populate('userId', 'firstName lastName phone address'); if (!order) return res.status(404).json({ success: false, message: 'Order not found' }); res.json({ success: true, order: (await attachPayments([order]))[0] }); } catch (error) { next(error); } };

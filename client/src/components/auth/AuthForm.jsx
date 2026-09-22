@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Sparkles } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import Button from '../ui/Button';
 import PopUp from '../ui/PopUp';
-import googleLogo from '../../../assets/SVG-Logo/google.svg';
 
 export default function AuthForm({ mode = 'login' }) {
   const isRegister = mode === 'register';
@@ -19,7 +17,6 @@ export default function AuthForm({ mode = 'login' }) {
   const [error, setError] = useState('');
   const [successOpen, setSuccessOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
-  const [googleComingSoonOpen, setGoogleComingSoonOpen] = useState(false);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -92,27 +89,6 @@ export default function AuthForm({ mode = 'login' }) {
           <h2 className="text-xl font-semibold text-ink">{successMessage}</h2>
           <Button variant="primary" onClick={() => navigate(destination)}>
             Continue
-          </Button>
-        </div>
-      </PopUp>
-
-      {/* Pop-up แจ้งเตือน Google Sign-in Coming Soon */}
-      <PopUp open={googleComingSoonOpen} onClose={() => setGoogleComingSoonOpen(false)}>
-        <div className="flex flex-col items-center gap-3 py-4 text-center">
-          <span className="flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary">
-            <Sparkles className="size-7 text-primary" />
-          </span>
-          <h2 className="text-xl font-bold text-ink">Google Sign-in Coming Soon</h2>
-          <p className="max-w-xs text-sm leading-relaxed text-ink/70">
-            Google Sign-in is currently under development. Please sign in with your email and password.
-          </p>
-          <Button
-            type="button"
-            variant="primary"
-            className="mt-2 min-w-[120px]"
-            onClick={() => setGoogleComingSoonOpen(false)}
-          >
-            Got it
           </Button>
         </div>
       </PopUp>
@@ -201,31 +177,11 @@ export default function AuthForm({ mode = 'login' }) {
           {isRegister ? 'Create Account' : 'Login'}
         </Button>
 
-        <p className="text-center text-xl font-medium text-gray-400">- OR -</p>
-
-        <Button
-          type="button"
-          variant="outline"
-          size="lg"
-          className="h-14 w-full gap-3 cursor-pointer"
-          onClick={() => setGoogleComingSoonOpen(true)}
-        >
-          <img src={googleLogo} alt="" className="size-6" />
-          Login with Google
-        </Button>
-
-        {isRegister ? (
+        {isRegister && (
           <p className="text-center text-lg text-gray-500">
             Already have an account?{' '}
             <Link to="/login" className="font-medium text-violet hover:underline">
               Log in
-            </Link>
-          </p>
-        ) : (
-          <p className="text-center text-lg text-gray-500">
-            Don&rsquo;t have an account?{' '}
-            <Link to="/register" className="font-medium text-violet hover:underline">
-              Sign up
             </Link>
           </p>
         )}
