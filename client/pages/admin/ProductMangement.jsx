@@ -9,31 +9,16 @@ const blank = { name: '', description: '', price: '', quantity: '', category: ''
 
 const defaultOptions = {
   categories: [
-    { _id: '681a0f1e2d3c4b5a6970f015', name: 'Merchandise' },
-    { _id: '681a0f1e2d3c4b5a6970f010', name: 'เสื้อผ้า' },
-    { _id: '681a0f1e2d3c4b5a6970f011', name: 'หมวก' },
-    { _id: '681a0f1e2d3c4b5a6970f013', name: 'แฟนไอเทม' },
-    { _id: '681a0f1e2d3c4b5a6970f014', name: 'อัลบั้มเพลง' },
     { _id: 'cat-vinyl', name: 'Vinyl' },
     { _id: 'cat-apparel', name: 'Apparel' },
     { _id: 'cat-acc', name: 'Accessories' },
     { _id: 'cat-col', name: 'Collectibles' },
   ],
   artists: [
-    { _id: '681a0f1e2d3c4b5a6970f070', name: 'THE PARKINSON' },
-    { _id: '681a0f1e2d3c4b5a6970f071', name: 'SMALLROOM' },
-    { _id: '681a0f1e2d3c4b5a6970f072', name: 'LAONGFONG' },
-    { _id: '681a0f1e2d3c4b5a6970f073', name: 'TAYLOR SWIFT' },
-    { _id: '681a0f1e2d3c4b5a6970f074', name: 'JUSTIN BIEBER' },
-    { _id: '681a0f1e2d3c4b5a6970f075', name: 'LINKIN PARK' },
-    { _id: '681a0f1e2d3c4b5a6970f076', name: 'BILLIE EILISH' },
-    { _id: '681a0f1e2d3c4b5a6970f077', name: 'A7X' },
-    { _id: '681a0f1e2d3c4b5a6970f078', name: 'SACIT' },
-    { _id: '681a0f1e2d3c4b5a6970f079', name: 'CHAKSARN' },
-    { _id: '681a0f1e2d3c4b5a6970f07a', name: 'NO ONE ELSE' },
-    { _id: '681a0f1e2d3c4b5a6970f07b', name: 'NONT TANONT' },
-    { _id: '681a0f1e2d3c4b5a6970f07c', name: 'WHAL & DOLPH' },
-    { _id: '681a0f1e2d3c4b5a6970f07d', name: 'UNCLE BEN' },
+    { _id: 'art-parkinson', name: 'THE PARKINSON' },
+    { _id: 'art-smallroom', name: 'SMALLROOM' },
+    { _id: 'art-bird', name: 'Thongchai McIntyre' },
+    { _id: 'art-mr', name: 'MERCHROOM' },
   ],
 };
 
@@ -83,27 +68,20 @@ export default function ProductManagement() {
 
   const save = async (event) => {
     event.preventDefault();
-    setError('');
     try {
       const body = {
-        name: form.name,
-        description: form.description,
+        ...form,
         price: Number(form.price),
         quantity: Number(form.quantity),
-        imageUrl: form.imageUrl,
-        category: form.category || undefined,
-        artist: form.artist || undefined,
-        tags: form.tags ? (typeof form.tags === 'string' ? form.tags.split(',').map((tag) => tag.trim()).filter(Boolean) : form.tags) : [],
+        tags: form.tags ? form.tags.split(',').map((tag) => tag.trim()).filter(Boolean) : [],
       };
-      if (form._id) {
-        await updateProduct(form._id, body);
-      } else {
-        await createProduct(body);
-      }
-      load();
+      const data = form._id ? await updateProduct(form._id, body) : await createProduct(body);
+      const savedProduct = data?.product || { ...body, _id: form._id || `prod-${Date.now()}` };
+      setProducts((items) =>
+        form._id ? items.map((item) => (item._id === savedProduct._id ? savedProduct : item)) : [savedProduct, ...items]
+      );
       setForm(null);
-    } catch (err) {
-      setError(err?.message || 'Failed to save product to database');
+    } catch {
       // Local fallback update
       const localProduct = {
         ...form,
@@ -118,16 +96,6 @@ export default function ProductManagement() {
     }
   };
 
-  const remove = async (id) => {
-    if (!window.confirm('Delete this product?')) return;
-    try {
-      await deleteProduct(id);
-      load();
-    } catch {
-      setProducts((all) => all.filter((p) => p._id !== id && p.id !== id));
-    }
-  };
-
   const edit = (item) =>
     setForm({
       ...item,
@@ -139,20 +107,6 @@ export default function ProductManagement() {
   const safeProducts = Array.isArray(products) ? products : [];
   const safeCategories = Array.isArray(options?.categories) ? options.categories : defaultOptions.categories;
   const safeArtists = Array.isArray(options?.artists) ? options.artists : defaultOptions.artists;
-
-  const resolveCategoryName = (category) => {
-    if (!category) return '—';
-    if (typeof category === 'object' && category.name) return category.name;
-    const found = safeCategories.find((c) => String(c._id) === String(category));
-    return found ? found.name : String(category);
-  };
-
-  const resolveArtistName = (artist) => {
-    if (!artist) return '—';
-    if (typeof artist === 'object' && artist.name) return artist.name;
-    const found = safeArtists.find((a) => String(a._id) === String(artist));
-    return found ? found.name : String(artist);
-  };
 
   return (
     <div className="admin-page">
@@ -169,8 +123,8 @@ export default function ProductManagement() {
           {safeProducts.map((item) => (
             <tr key={item._id || item.id}>
               <td>{item.name}</td>
-              <td>{resolveArtistName(item.artist)}</td>
-              <td>{resolveCategoryName(item.category)}</td>
+              <td>{item.artist?.name || (typeof item.artist === 'string' ? item.artist : '—')}</td>
+              <td>{item.category?.name || (typeof item.category === 'string' ? item.category : '—')}</td>
               <td>฿{Number(item.price || 0).toLocaleString()}</td>
               <td>{item.quantity ?? 0}</td>
               <td>
@@ -179,7 +133,16 @@ export default function ProductManagement() {
                 </button>
                 <button
                   className="link-btn danger"
-                  onClick={() => remove(item._id || item.id)}
+                  onClick={async () => {
+                    if (window.confirm('Delete this product?')) {
+                      try {
+                        await deleteProduct(item._id);
+                      } catch {
+                        // ignore error and proceed with local state deletion
+                      }
+                      setProducts((all) => all.filter((p) => p._id !== item._id));
+                    }
+                  }}
                 >
                   Delete
                 </button>

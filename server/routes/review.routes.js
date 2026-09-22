@@ -1,13 +1,15 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const Review = require('../models/Review');
-const User = require('../models/User');
 const { authUser } = require('../middleware/auth');
-const { adminOnly } = require('../middleware/adminOnly');
 const { validateReview } = require('../middleware/validate');
 
 const router = express.Router();
 
+/**
+ * GET /api/reviews/product/:productId
+ * ดึงรีวิวทั้งหมดของสินค้าชิ้นหนึ่ง
+ */
 router.get('/product/:productId', async (req, res, next) => {
   try {
     const { productId } = req.params;
@@ -35,6 +37,10 @@ router.get('/product/:productId', async (req, res, next) => {
   }
 });
 
+/**
+ * POST /api/reviews
+ * เพิ่มรีวิวสินค้าใหม่ (ต้องล็อกอิน)
+ */
 router.post('/', authUser, validateReview, async (req, res, next) => {
   try {
     const { productId, rating, comment } = req.body;
@@ -51,35 +57,6 @@ router.post('/', authUser, validateReview, async (req, res, next) => {
       message: 'Review submitted successfully',
       data: review,
     });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.patch('/:id', authUser, async (req, res, next) => {
-  try {
-    const review = await Review.findById(req.params.id);
-    if (!review) return res.status(404).json({ success: false, message: 'Review not found' });
-    if (String(review.userId) !== String(req.user._id)) {
-      return res.status(403).json({ success: false, message: 'Permission denied' });
-    }
-    const updated = await Review.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
-    return res.json({ success: true, data: updated });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.delete('/:id', authUser, async (req, res, next) => {
-  try {
-    const review = await Review.findById(req.params.id);
-    if (!review) return res.status(404).json({ success: false, message: 'Review not found' });
-    const user = await User.findById(req.user._id).select('role');
-    if (!user || (user.role !== 'admin' && String(review.userId) !== String(req.user._id))) {
-      return res.status(403).json({ success: false, message: 'Permission denied' });
-    }
-    await Review.findByIdAndDelete(req.params.id);
-    return res.json({ success: true, message: 'Review deleted successfully' });
   } catch (err) {
     next(err);
   }

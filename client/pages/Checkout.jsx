@@ -10,9 +10,98 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../src/context/CartContext';
 import Container from '../src/components/ui/Container';
 import Breadcrumb from '../src/components/ui/Breadcrumb';
+import { createCharge } from '../src/api/payments.api';
+import { saveOrder } from '../src/utils/orderStorage';
 
 // ค่าจัดส่งแบบคงที่
 const DELIVERY_FEE = 15;
+
+const OMISE_PUBLIC_KEY = import.meta.env.VITE_OMISE_PUBLIC_KEY || 'pkey_test_6934r51un8ckfq4d9nj';
+
+function getOmise() {
+  if (typeof window !== 'undefined' && window.Omise) {
+    window.Omise.setPublicKey(OMISE_PUBLIC_KEY);
+  }
+  return window.Omise || null;
+}
+
+function createOmiseCardToken(cardDetails) {
+  const omise = getOmise();
+  return new Promise((resolve, reject) => {
+    if (!omise) {
+      reject(new Error('Omise.js failed to load. Please refresh the page.'));
+      return;
+    }
+    omise.createToken('card', cardDetails, (statusCode, response) => {
+      if (statusCode === 200 && response.id) {
+        resolve(response.id);
+      } else {
+        const message = response?.message || response?.data?.message || 'Unable to create card token';
+        reject(new Error(message));
+      }
+    });
+  });
+}
+
+// ------------- Input Formatting (ช่วยกรอกให้ถูกฟอร์แมต) -------------
+// บัตร: กลุ่มเลข 4 หลัก คั่นด้วยช่องว่าง (4242 4242 4242 4242)
+function formatCardNumber(value) {
+  const digits = value.replace(/\D+/g, '').slice(0, 19);
+  return digits.replace(/(\d{4})(?=\d)/g, '$1 ');
+}
+
+// หมดอายุ: ฟอร์แมตเป็น MM/YY อัตโนมัติ (12/30)
+function formatExpiry(value) {
+  const digits = value.replace(/\D+/g, '').slice(0, 4);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+}
+
+// ----------------------------------------------------------------------
+// buildCheckoutOrder: สร้าง Object คำสั่งซื้อใหม่ (newOrder) ที่ต้นทาง module scope
+// - เรียกใช้ Date.now() / new Date() เฉพาะในฟังก์ชันระดับ module เท่านั้น
+//   (รูปแบบเดียวกับ helper getOmise/createOmiseCardToken ที่ lint ผ่าน)
+// - ฟังก์ชันนี้จะถูกเรียกจาก handleSubmit (event handler) ไม่ใช่ระหว่าง render
+// ----------------------------------------------------------------------
+function buildCheckoutOrder({
+  items,
+  total,
+  paymentMethod,
+  paymentMethodLabel,
+  transactionId,
+  subtotal,
+  discountAmount,
+  deliveryFee,
+  shippingAddress,
+}) {
+  return {
+    id: `ORD-${Date.now().toString().slice(-6)}`,
+    date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+    createdAt: new Date().toISOString(),
+    status: 'pending',
+    deliveryStatus: 'pending',
+    paymentStatus: paymentMethod === 'card' && transactionId ? 'paid' : 'pending',
+    paymentMethod,
+    paymentMethodLabel,
+    transactionId,
+    subtotal,
+    discountAmount,
+    deliveryFee,
+    total,
+    totalAmount: total,
+    shippingAddress,
+    shippingProvider: 'Standard Delivery',
+    items: items.map((item) => ({
+      id: item.id,
+      name: item.name,
+      size: item.size || 'M',
+      color: item.color || 'Standard',
+      price: item.price,
+      quantity: item.quantity,
+      image: item.image || '',
+    })),
+  };
+}
 
 const formatCurrency = (val) =>
   `฿${Number(val || 0).toLocaleString('th-TH', {
@@ -27,15 +116,18 @@ export default function Checkout() {
   // ดึงข้อมูลสินค้า (items), ฟังก์ชันล้างตะกร้า (clearCart) และอัตราส่วนลด (discountRate) จาก Cart Context
   const { items, clearCart, discountRate = 0 } = useCart();
 
+  // State เตือน Cart Guard ว่า checkout เสร็จแล้ว (ต้องประกาศก่อน useEffect ที่ใช้ค่าใน deps)
+  const [checkoutDone, setCheckoutDone] = useState(false);
+
   // ----------------------------------------------------------------------
   // Cart Guard: ตรวจสอบความถูกต้องของสินค้าในตะกร้า
   // หากไม่มีสินค้าในตะกร้า (items.length === 0) จะดีดผู้ใช้ออกไปหน้า /cart อัตโนมัติ
   // ----------------------------------------------------------------------
   useEffect(() => {
-    if (items.length === 0) {
+    if (items.length === 0 && !checkoutDone) {
       navigate('/cart');
     }
-  }, [items, navigate]);
+  }, [items, navigate, checkoutDone]);
 
   // ----------------------------------------------------------------------
   // Order Price Calculations (คำนวณราคาสินค้าและค่าจัดส่ง):
@@ -58,6 +150,10 @@ export default function Checkout() {
   // State สำหรับเลือกประเภทช่องทางการชำระเงิน ('card' | 'promptpay' | 'truemoney' | 'bank')
   const [paymentMethod, setPaymentMethod] = useState('card');
 
+  // State สำหรับการประมวลผลการชำระเงินด้วย Omise
+  const [processing, setProcessing] = useState(false);
+  const [paymentError, setPaymentError] = useState('');
+
   // State สำหรับเก็บข้อมูลในแบบฟอร์ม (ผู้ติดต่อ, ที่อยู่จัดส่ง, ข้อมูลการชำระเงิน)
   const [formData, setFormData] = useState({
     name: '', email: '', city: '', state: '', zipCode: '', country: '',
@@ -70,43 +166,83 @@ export default function Checkout() {
   // Handler จัดการการเปลี่ยนแปลงมูลค่าในอินพุตทุกช่องของฟอร์ม
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    let next = value;
+    if (name === 'cardNumber') next = formatCardNumber(value);
+    if (name === 'expDate') next = formatExpiry(value);
+    setFormData((prev) => ({ ...prev, [name]: next }));
   };
 
   // ----------------------------------------------------------------------
   // Submit Handler: จัดการการยืนยันคำสั่งซื้อ
-  // - สร้าง Object คำสั่งซื้อใหม่ (newOrder)
-  // - บันทึกลง localStorage ('my_orders') สำหรับจำลองระบบสั่งซื้อ
-  // - ล้างข้อมูลตะกร้าสินค้า (clearCart) และเปลี่ยนหน้าไปยัง /orders
+  // - หากเลือกบัตรเครดิต/เดบิต จะสร้าง Omise Card Token ฝั่ง client (Public Key)
+  //   แล้วส่งไป Backend /api/payments/charge เพื่อเรียกเก็บเงินผ่าน Omise (Secret Key)
+  // - สร้าง Object คำสั่งซื้อใหม่ (newOrder) และบันทึกลง localStorage
+  // - ล้างข้อมูลตะกร้าสินค้า (clearCart) และเปลี่ยนหน้าไปยังหน้าออเดอร์คอนเฟิร์ม
   // ----------------------------------------------------------------------
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // สร้างข้อมูลคำสั่งซื้อใหม่ (Mock Order Data)
-    const newOrder = {
-      id: `ORD-${Date.now().toString().slice(-6)}`,
-      date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-      status: 'Processing',
-      total: total,
-      paymentMethod: paymentMethod,
-      items: items.map((item) => ({
-        id: item.id,
-        name: item.name,
-        size: item.size || 'M',
-        color: item.color || 'Standard',
-        price: item.price,
-        quantity: item.quantity,
-        image: item.image || '',
-      })),
-    };
+    let transactionId = null;
+
+    if (paymentMethod === 'card') {
+      setProcessing(true);
+      setPaymentError('');
+      try {
+        const [expiryMonth, expiryYear] = formData.expDate.split('/');
+        const normalizedYear = expiryYear?.length === 2 ? `20${expiryYear}` : (expiryYear || '');
+        const card = {
+          name: formData.cardName,
+          number: formData.cardNumber.replace(/\s+/g, ''),
+          expiration_month: expiryMonth || '',
+          expiration_year: normalizedYear,
+          security_code: formData.cvc,
+        };
+        const token = await createOmiseCardToken(card);
+        const charge = await createCharge({ token, orderId: null, amount: total });
+        if (charge?.charge?.id) {
+          if (!charge.charge.paid) {
+            throw new Error(charge.charge.failureMessage || 'Payment was declined by the bank');
+          }
+          transactionId = charge.charge.id;
+        }
+      } catch (error) {
+        setProcessing(false);
+        setPaymentError(error.message);
+        return;
+      }
+      setProcessing(false);
+    }
+
+    const shippingAddress = [
+      formData.deliveryName || formData.name,
+      formData.deliveryAddressLine || formData.addressLine,
+      formData.deliveryCity || formData.city,
+      formData.deliveryState || formData.state,
+      formData.deliveryZipCode || formData.zipCode,
+    ].filter(Boolean).join(', ');
+
+    // สร้างอ็อบเจกต์คำสั่งซื้อใหม่ ผ่าน module-scope helper (ไม่ใช้ impure calls ใน component)
+    const newOrder = buildCheckoutOrder({
+      items,
+      total,
+      paymentMethod,
+      paymentMethodLabel: paymentMethod === 'card' ? 'Credit / Debit Card' : paymentMethod,
+      transactionId,
+      subtotal,
+      discountAmount,
+      deliveryFee,
+      shippingAddress,
+    });
 
     // บันทึกคำสั่งซื้อลงใน LocalStorage
-    const existingOrders = JSON.parse(localStorage.getItem('my_orders') || '[]');
-    localStorage.setItem('my_orders', JSON.stringify([newOrder, ...existingOrders]));
+    saveOrder(newOrder);
 
-    // ล้างตะกร้าสินค้าและนำทางไปหน้าประวัติการสั่งซื้อ (/orders)
+    // ป้องกัน Cart Guard ดีดกลับไปหน้า /cart หลังจบการเช็คเอาต์
+    setCheckoutDone(true);
+
+    // ล้างตะกร้าสินค้าและนำทางไปหน้าออเดอร์คอนเฟิร์ม
     if (clearCart) clearCart();
-    navigate('/orders');
+    navigate(`/order-confirmation/${newOrder.id}`);
   };
 
   return (
@@ -525,11 +661,15 @@ export default function Checkout() {
           </div>
 
           {/* ปุ่มยืนยันการสั่งซื้อ */}
+          {paymentError && (
+            <p className="mt-3 text-center text-sm font-medium text-[#FF3333]">{paymentError}</p>
+          )}
           <button
             type="submit"
-            className="mt-5 flex h-12 w-full items-center justify-center rounded-full bg-primary text-base font-semibold text-white transition hover:opacity-90"
+            disabled={processing}
+            className="mt-5 flex h-12 w-full items-center justify-center rounded-full bg-primary text-base font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Finish checkout
+            {processing ? 'Processing payment...' : 'Finish checkout'}
           </button>
         </aside>
       </form>

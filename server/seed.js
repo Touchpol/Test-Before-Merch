@@ -1,11 +1,5 @@
-// ============================================================================
-// MERCHROOM DATABASE SEED SCRIPT
-// ============================================================================
-// ไฟล์นี้ใช้สำหรับรีเซ็ตและเติมข้อมูลเริ่มต้น (Initial Seed Dataset) ลงใน MongoDB
-// ประกอบด้วย: Users, Categories, Artists, Products และ Orders
-// ============================================================================
 
-// ==================== 1. IMPORTS & MODELS ====================
+// Seed database with initial dataset (upsert)
 const connectDB = require('./db');
 const User = require('./models/User');
 const Artist = require('./models/Artist');
@@ -16,802 +10,507 @@ const Order = require('./models/Order');
 const Payment = require('./models/Payment');
 const Review = require('./models/Review');
 const mongoose = require('mongoose');
-const bcrypt = require('bcrypt');
 
+// Upsert documents using _id filter
+async function upsertDocs(model, docs) {
+    const ops = (Array.isArray(docs) ? docs : [docs]).map((doc) => ({
+        updateOne: {
+            filter: { _id: doc._id },
+            update: { $set: doc },
+            upsert: true
+        }
+    }));
+    if (ops.length) await model.bulkWrite(ops);
+}
 
-// ==================== 2. SEED USERS DATA ====================
-const mockUsers = [
-  {
-    _id: 'usr-non',
-    email: 'non@gmail.com',
-    password: 'non1234',
-    firstName: 'นนท์',
-    lastName: 'ใจงาม',
-    phone: '0812345678',
-    address: '123 สุขุมวิท กรุงเทพฯ 10110',
-    role: 'customer',
-    employeeId: '',
-    memberSince: '2025-03-10',
-  },
-  {
-    _id: 'usr-touch',
-    email: 'touchy2003@gmail.com',
-    password: 'touch1234',
-    firstName: 'Touch',
-    lastName: 'Chy',
-    phone: '0809203752',
-    address: '45 ลาดพร้าว กรุงเทพฯ 10900',
-    role: 'customer',
-    employeeId: '',
-    memberSince: '2026-01-15',
-  },
-  {
-    _id: 'usr-earn',
-    email: 'earn.sarawut@gmail.com',
-    password: 'earn1234',
-    firstName: 'Earn',
-    lastName: 'Sarawut',
-    phone: '0864321987',
-    address: '789 สีลม ปทุมธานี 12000',
-    role: 'customer',
-    employeeId: '',
-    memberSince: '2025-12-20',
-  },
-  {
-    _id: 'usr-milk',
-    email: 'milk.pimchanok@gmail.com',
-    password: 'milk1234',
-    firstName: 'Milk',
-    lastName: 'Pimchanok',
-    phone: '0987654321',
-    address: '12 รัชดาภิเษก กรุงเทพฯ 10400',
-    role: 'customer',
-    employeeId: '',
-    memberSince: '2026-02-05',
-  },
-  {
-    _id: 'usr-mike',
-    email: 'mike.chayanit@gmail.com',
-    password: 'mike1234',
-    firstName: 'Mike',
-    lastName: 'Chayanit',
-    phone: '0819876543',
-    address: '56 ลาดพร้าว นนทบุรี 11000',
-    role: 'customer',
-    employeeId: '',
-    memberSince: '2026-03-14',
-  },
-  {
-    _id: 'usr-ploy',
-    email: 'ploy.apsara@gmail.com',
-    password: 'ploy1234',
-    firstName: 'Ploy',
-    lastName: 'Apsara',
-    phone: '0855556666',
-    address: '88 บางรัก กรุงเทพฯ 10500',
-    role: 'customer',
-    employeeId: '',
-    memberSince: '2026-04-01',
-  },
-  {
-    _id: 'usr-game',
-    email: 'game.wirayut@gmail.com',
-    password: 'game1234',
-    firstName: 'Game',
-    lastName: 'Wirayut',
-    phone: '0912345678',
-    address: '34 พระราม 9 กรุงเทพฯ 10310',
-    role: 'customer',
-    employeeId: '',
-    memberSince: '2026-05-22',
-  },
-  {
-    _id: 'usr-pim',
-    email: 'pim.nattaya@gmail.com',
-    password: 'pim1234',
-    firstName: 'Pim',
-    lastName: 'Nattaya',
-    phone: '0877778888',
-    address: '21 สุขุมวิท ชลบุรี 20000',
-    role: 'customer',
-    employeeId: '',
-    memberSince: '2026-06-10',
-  },
-  {
-    _id: 'usr-admin',
-    email: 'admin@merchroom.com',
-    password: 'admin1234',
-    firstName: 'ทีม',
-    lastName: 'แอดมิน',
-    phone: '0898765432',
-    address: 'สำนักงานใหญ่ กรุงเทพฯ',
-    role: 'admin',
-    employeeId: 'EMP-0001',
-    memberSince: '2024-11-01',
-  },
-  {
-    _id: 'usr-focus',
-    email: 'focusjustdoit@gmail.com',
-    password: 'focus1234',
-    firstName: 'Focus',
-    lastName: 'Niti',
-    phone: '0809203752',
-    address: 'bangkok',
-    role: 'admin',
-    employeeId: 'EMP-0002',
-    memberSince: '2024-11-01',
-  },
-  {
-    _id: 'usr-focus-admin',
-    email: 'focus@merchroom.com',
-    password: 'Test1234!',
-    firstName: 'Focus',
-    lastName: 'Admin',
-    phone: '0809203752',
-    address: 'สำนักงานใหญ่ กรุงเทพฯ',
-    role: 'admin',
-    employeeId: 'EMP-0003',
-    memberSince: '2024-11-01',
-  },
-  // Added Admin accounts (touch, heinz, tony, non) with @merchroom.com and same password (admin1234)
-  {
-    email: 'touch@merchroom.com',
-    password: 'admin1234',
-    firstName: 'Touch',
-    lastName: 'Admin',
-    phone: '0809203752',
-    address: 'สำนักงานใหญ่ กรุงเทพฯ',
-    role: 'admin',
-    employeeId: 'EMP-0004',
-    memberSince: '2024-11-01',
-  },
-  {
-    email: 'heinz@merchroom.com',
-    password: 'admin1234',
-    firstName: 'Heinz',
-    lastName: 'Admin',
-    phone: '0809203752',
-    address: 'สำนักงานใหญ่ กรุงเทพฯ',
-    role: 'admin',
-    employeeId: 'EMP-0005',
-    memberSince: '2024-11-01',
-  },
-  {
-    email: 'tony@merchroom.com',
-    password: 'admin1234',
-    firstName: 'Tony',
-    lastName: 'Admin',
-    phone: '0809203752',
-    address: 'สำนักงานใหญ่ กรุงเทพฯ',
-    role: 'admin',
-    employeeId: 'EMP-0006',
-    memberSince: '2024-11-01',
-  },
-  {
-    email: 'non@merchroom.com',
-    password: 'admin1234',
-    firstName: 'Non',
-    lastName: 'Admin',
-    phone: '0809203752',
-    address: 'สำนักงานใหญ่ กรุงเทพฯ',
-    role: 'admin',
-    employeeId: 'EMP-0007',
-    memberSince: '2024-11-01',
-  },
-];
-
-
-// ==================== 3. SEED ORDERS DATA ====================
-const mockOrders = [
-  {
-    _id: 'ORD-0001',
-    userId: 'usr-earn',
-    orderNumber: 'MR-20260108-100011',
-    items: [{ name: 'Bird Twenty Two (Color Vinyl)', price: 2200, quantity: 1 }],
-    totalAmount: 2200,
-    shippingProvider: 'Kerry Express',
-    shippingAddress: '789 สีลม ปทุมธานี 12000',
-    deliveryStatus: 'delivered',
-    createdAt: '2026-01-08T09:00:00+07:00',
-  },
-  {
-    _id: 'ORD-0002',
-    userId: 'usr-milk',
-    orderNumber: 'MR-20260114-100345',
-    items: [
-      { name: 'PARADOX UNPLUGGED T-Shirt', price: 590, quantity: 2 },
-      { name: 'PARADOX UNPLUGGED Sweater', price: 950, quantity: 1 },
-    ],
-    totalAmount: 2130,
-    shippingProvider: 'Flash Express',
-    shippingAddress: '12 รัชดาภิเษก กรุงเทพฯ 10400',
-    deliveryStatus: 'delivered',
-    createdAt: '2026-01-14T10:30:00+07:00',
-  },
-  {
-    _id: 'ORD-0003',
-    userId: 'usr-non',
-    orderNumber: 'MR-20260122-100789',
-    items: [{ name: '4EVE ART TOY : Limited Blind Box Figure (ยกกล่อง)', price: 6000, quantity: 1 }],
-    totalAmount: 6000,
-    shippingProvider: 'DHL Express',
-    shippingAddress: '123 สุขุมวิท กรุงเทพฯ 10110',
-    deliveryStatus: 'delivered',
-    createdAt: '2026-01-22T11:00:00+07:00',
-  },
-];
-
-
-// ==================== 4. MAIN SEED FUNCTION ====================
 async function runSeed() {
     await connectDB();
 
     try {
-        // Clear existing collections to prevent duplicate key errors
-        await Product.deleteMany({});
-        await Artist.deleteMany({});
-        await Category.deleteMany({});
-        await User.deleteMany({});
-        await Order.deleteMany({});
-        await Payment.deleteMany({});
-        await Review.deleteMany({});
-        await Cart.deleteMany({});
-
-        // --- A. SEED USERS ---
-        const createdUsers = [];
-        for (const u of mockUsers) {
-            const hashedPassword = await bcrypt.hash(u.password || 'password123', 10);
-            const userObj = {
-                email: u.email,
-                password: hashedPassword,
-                firstName: u.firstName || 'User',
-                lastName: u.lastName || '',
-                phone: u.phone || '',
-                address: u.address || '',
-                role: u.role || 'customer',
-                employeeId: u.employeeId || '',
-                interests: u.interests || [],
-                paymentMethods: u.paymentMethods || [],
-                profilePicture: u.profilePicture || '',
-                socialAccounts: u.socialAccounts || []
-            };
-            if (u._id && mongoose.Types.ObjectId.isValid(u._id)) {
-                userObj._id = u._id;
+        // Users (Admin & Customer)
+        await upsertDocs(User, [
+            {
+                _id: "681a0f1e2d3c4b5a6970f001",
+                email: "non@merchroom.com",
+                firstName: "นนท์",
+                lastName: "ใจงาม",
+                phone: "0812345678",
+                interests: ["streetwear", "art"],
+                address: "123 สุขุมวิท กรุงเทพฯ 10110",
+                paymentMethods: ["PromptPay", "บัตรเครดิต"],
+                profilePicture: "/uploads/non.png",
+                socialAccounts: ["google"],
+                password: "$2a$10$placeholderBcryptHashXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+                role: "customer"
+            },
+            {
+                _id: "681a0f1e2d3c4b5a6970f003",
+                email: "admin@merchroom.com",
+                firstName: "ทีม",
+                lastName: "แอดมิน",
+                phone: "0898765432",
+                interests: [],
+                address: "",
+                paymentMethods: [],
+                profilePicture: "",
+                socialAccounts: [],
+                password: "$2a$10$placeholderBcryptHashYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY",
+                role: "admin",
+                employeeId: "EMP-0001"
+            },
+            {
+                _id: "681a0f1e2d3c4b5a6970f002",
+                email: "focusjustdoit@gmail.com",
+                firstName: "Focus",
+                lastName: "Niti",
+                phone: "0809203752",
+                interests: [],
+                address: "bangkok",
+                paymentMethods: ["Promtpunk"],
+                profilePicture: "",
+                socialAccounts: [],
+                password: "000000000000",
+                role: "admin",
+                employeeId: "EMP-0002"
+            },
+            {
+                _id: "6900f1e2d3c4b5a6970f0023",
+                email: "touchy2003@gmail.com",
+                firstName: "Touch",
+                lastName: "Chy",
+                phone: "0809203752",
+                interests: [],
+                address: "bangkok",
+                paymentMethods: ["Promtpunk"],
+                profilePicture: "",
+                socialAccounts: [],
+                password: "000000000000",
+                role: "customer"
             }
-            const created = await User.create(userObj);
-            createdUsers.push({ mockId: u._id, dbId: created._id, email: u.email });
-        }
+        ]);
 
-        // --- B. SEED CATEGORIES ---
-        const categories = await Category.create([
+        // Categories
+        await upsertDocs(Category, [
             { _id: "681a0f1e2d3c4b5a6970f010", name: "เสื้อผ้า", slug: "apparel" },
             { _id: "681a0f1e2d3c4b5a6970f011", name: "หมวก", slug: "hat" },
             { _id: "681a0f1e2d3c4b5a6970f013", name: "แฟนไอเทม", slug: "fanmerch" },
-            { _id: "681a0f1e2d3c4b5a6970f014", name: "อัลบั้มเพลง", slug: "album" },
-            { _id: "681a0f1e2d3c4b5a6970f015", name: "Merchandise", slug: "merchandise" }
+            { _id: "681a0f1e2d3c4b5a6970f014", name: "อัลบั้มเพลง", slug: "album" }
         ]);
 
-        // --- C. SEED ARTISTS ---
-        const artists = await Artist.create([
-            { _id: "681a0f1e2d3c4b5a6970f070", name: "THE PARKINSON", type: "band", bio: "The Parkinson Orchestra concert", style: "pop, R&B" },
-            { _id: "681a0f1e2d3c4b5a6970f071", name: "SMALLROOM", type: "band", bio: "Smallroom 25th Anniversary", style: "indie" },
-            { _id: "681a0f1e2d3c4b5a6970f072", name: "LAONGFONG", type: "band", bio: "Laongfong band", style: "pop" },
-            { _id: "681a0f1e2d3c4b5a6970f073", name: "TAYLOR SWIFT", type: "solo", bio: "Global Pop Superstar", style: "pop, country" },
-            { _id: "681a0f1e2d3c4b5a6970f074", name: "JUSTIN BIEBER", type: "solo", bio: "Pop icon", style: "pop, R&B" },
-            { _id: "681a0f1e2d3c4b5a6970f075", name: "LINKIN PARK", type: "band", bio: "Legendary Rock Band", style: "rock, metal" },
-            { _id: "681a0f1e2d3c4b5a6970f076", name: "BILLIE EILISH", type: "solo", bio: "Grammy Award-winning artist", style: "pop, alternative" },
-            { _id: "681a0f1e2d3c4b5a6970f077", name: "A7X", type: "band", bio: "Heavy metal band", style: "metal, rock" },
-            { _id: "681a0f1e2d3c4b5a6970f078", name: "SACIT", type: "group", bio: "Thai Handicraft and Art", style: "handicraft" },
-            { _id: "681a0f1e2d3c4b5a6970f079", name: "CHAKSARN", type: "group", bio: "Thai fashion craftsmanship", style: "craft" },
-            { _id: "681a0f1e2d3c4b5a6970f07a", name: "NO ONE ELSE", type: "band", bio: "Thai Pop Band", style: "pop" },
-            { _id: "681a0f1e2d3c4b5a6970f07b", name: "NONT TANONT", type: "solo", bio: "Thai singer", style: "pop" },
-            { _id: "681a0f1e2d3c4b5a6970f07c", name: "WHAL & DOLPH", type: "band", bio: "Indie pop duo", style: "indie pop" },
-            { _id: "681a0f1e2d3c4b5a6970f07d", name: "UNCLE BEN", type: "band", bio: "Indie band", style: "indie rock" }
-        ]);
-
-        // --- D. SEED PRODUCTS ---
-        await Product.create([
+        // Artists
+        await upsertDocs(Artist, [
             {
-                _id: "681a0f1e2d3c4b5a6970f0a1",
-                name: "VINYL: THE PARKINSON",
-                description: "The Parkinson Orchestra concert",
-                price: 2200,
-                quantity: 25,
-                national: "thailand",
-                style: "Photo",
-                medium: "Vinyl",
-                sizes: [],
-                tags: ["thailand", "Photo", "Vinyl"],
-                category: "681a0f1e2d3c4b5a6970f014",
-                artist: "681a0f1e2d3c4b5a6970f070",
-                imageUrl: ""
+                _id: "681a0f1e2d3c4b5a6970f070",
+                name: "Nont Tanont (นนท์ ธนนท์)",
+                realName: "ธนนท์ จำเริญ",
+                type: "solo",
+                bio: "แชมป์ The Voice Thailand ซีซัน 1 และ The Mask Singer หน้ากากเป็ดน้อย นักร้องเสียงนุ่มละมุน เจ้าของเพลงฮิต โต๊ะริม, วันครบเลิก และ ฝืนตัวเองไม่เป็น สังกัดเลิฟอีส",
+                style: "pop, R&B",
+                socialLinks: ["https://www.instagram.com/tanont916/"],
+                profilePic: "/artists/nont-tanont.jpg"
             },
             {
-                _id: "681a0f1e2d3c4b5a6970f0a2",
-                name: "NFC Keychain: Smallroom 25th Anniversary",
-                description: "เสียงเพลงในรูปแบบเครื่องประดับสุดเท่ นอกจากจะเป็นพวงกุญแจที่สามารถพกติดตัวไปได้ทุกที่ แล้วNFC ยังทำให้แฟนๆห้องเล็กของคุณได้ฟังเพลง250เพลง",
-                price: 299,
-                quantity: 50,
-                national: "thailand",
-                style: "Illustration",
-                medium: "Accessories",
-                sizes: [],
-                tags: ["thailand", "Illustration", "Accessories"],
-                category: "681a0f1e2d3c4b5a6970f013",
-                artist: "681a0f1e2d3c4b5a6970f071",
-                imageUrl: ""
+                _id: "681a0f1e2d3c4b5a6970f071",
+                name: "Jeff Satur (เจฟ ซาเตอร์)",
+                realName: "วรกมล ซาเตอร์",
+                type: "solo",
+                bio: "นักร้อง-นักแต่งเพลง-นักแสดง เชื้อสายไทย-จีน-อังกฤษ เจ้าของบท 'คิมหันต์' ใน KinnPorsche The Series และเพลง 'แค่เธอ (why don't you stay)' สังกัด Wayfer Records",
+                style: "R&B, pop",
+                socialLinks: ["https://www.instagram.com/jeffsatur/"],
+                profilePic: "/artists/jeff-satur.jpg"
             },
             {
-                _id: "681a0f1e2d3c4b5a6970f0a3",
-                name: "SPMD0330-BLUEJEAN น้ำเงินยีนส์",
-                description: "LIDO LIVEHOUSE Nostalgia Replay presents",
-                price: 490,
-                quantity: 40,
-                national: "thailand",
-                style: "Typography",
-                medium: "Accessories",
-                sizes: [],
-                tags: ["thailand", "Typography", "Accessories"],
-                category: "681a0f1e2d3c4b5a6970f011",
-                artist: "681a0f1e2d3c4b5a6970f072",
-                imageUrl: ""
+                _id: "681a0f1e2d3c4b5a6970f072",
+                name: "Joey Phuwasit (โจอี้ ภูวศิษฐ์)",
+                realName: "ภูวศิษฐ์ อนันต์พรสิริ",
+                type: "solo",
+                bio: "นักร้องหนุ่มเลือดอีสาน รองแชมป์ The Voice Thailand 2018 เจ้าของเพลงไวรัล 'ดวงเดือน' และ 'นะหน้าทอง' ยอดวิวทะลุ 100 ล้าน สังกัดเจนี่ เรคคอร์ด ในเครือ GMM Grammy",
+                style: "pop-rock, หมอลำ",
+                socialLinks: ["https://www.instagram.com/joeypws/"],
+                profilePic: "/artists/joey-phuwasit.jpg"
             },
             {
-                _id: "681a0f1e2d3c4b5a6970f0a4",
-                name: "Charcoal Black Tee: Smallroom 25th Anniversary",
-                description: "เสื้อยืด Charcoal Black Tee ลายสุดพิเศษฉลอง 25ปี smallroom เสื้อยืดทรงสวย นุ่มสบาย ระบายอากาศดี",
-                price: 620,
-                quantity: 60,
-                national: "thailand",
-                style: "Illustration",
-                medium: "T-Shirt",
-                sizes: ["S", "M", "L", "XL"],
-                tags: ["thailand", "Illustration", "T-Shirt", "S", "M", "L", "XL"],
-                category: "681a0f1e2d3c4b5a6970f010",
-                artist: "681a0f1e2d3c4b5a6970f071",
-                imageUrl: ""
+                _id: "681a0f1e2d3c4b5a6970f073",
+                name: "Bird Thongchai (เบิร์ด ธงไชย)",
+                realName: "ธงไชย แมคอินไตย์",
+                type: "solo",
+                bio: "ซูเปอร์สตาร์เมืองไทย ศิลปินแห่งชาติ สาขาศิลปะการแสดง พ.ศ. 2565 ยอดจำหน่ายผลงานรวมกว่า 25 ล้านชุด เจ้าของเพลงดัง สบาย สบาย, บูมเมอแรง และ คู่กรรม",
+                style: "pop, dance-pop",
+                socialLinks: ["https://www.instagram.com/birdthongchai/", "https://www.facebook.com/birdthongchai"],
+                profilePic: "/artists/bird-thongchai.jpg"
+            },
+            //Band
+            {
+                _id: "681a0f1e2d3c4b5a6970f080",
+                name: "Three Man Down (ทรีแมนดาวน์)",
+                realName: "",
+                type: "band",
+                bio: "วงป็อปร็อกแห่งยุค สังกัดค่าย GeneLab ในเครือ GMM Grammy ผ่านเวที Band Lab เจ้าของเพลงฮิต 'ฝนตกไหม', 'ฝันถึงแฟนเก่า', 'ถ้าเธอรักฉันจริง', 'เดาไม่เก่ง', 'ข้างกัน' และอัลบั้ม '28' ถูกจัดอันดับเป็นศิลปินไทยที่ถูกสตรีมมากที่สุดปี 2023 บน Spotify",
+                style: "pop-rock",
+                socialLinks: ["https://www.instagram.com/threemandownofficial/"],
+                profilePic: "/artists/three-man-down.jpg"
             },
             {
-                _id: "681a0f1e2d3c4b5a6970f0a5",
-                name: "CANVAS BAG NO ONE ELSE",
-                description: "ผลิตจากผ้าแคนวาส หนาพิเศษ อยู่ทรงตั้งได้ ภายในใส่ได้จุใจ",
-                price: 1190,
-                quantity: 30,
-                national: "thailand",
-                style: "Illustration",
-                medium: "Accessories",
-                sizes: [],
-                tags: ["thailand", "Illustration", "Accessories"],
-                category: "681a0f1e2d3c4b5a6970f013",
-                artist: "681a0f1e2d3c4b5a6970f071",
-                imageUrl: ""
+                _id: "681a0f1e2d3c4b5a6970f081",
+                name: "Paradox (พาราด็อกซ์)",
+                realName: "",
+                type: "band",
+                bio: "วงร็อก-ป็อปขวัญใจวัยรุ่น สังกัดค่าย Genie Records ในเครือ GMM Grammy เจ้าของเพลงฮิต 'อาบน้ำ', 'Summer', 'อยู่ในใจ', 'จำได้ไหม', 'คิดถึง' และ 'ฟ้า' พร้อมคอนเสิร์ต Unplugged สุดประทับใจ",
+                style: "pop-rock",
+                socialLinks: ["https://www.instagram.com/paradoxthailand/"],
+                profilePic: "/artists/paradox.jpg"
             },
             {
-                _id: "681a0f1e2d3c4b5a6970f0a6",
-                name: "BABY, THAT'S SHOW BUSINESS CROPPED TEE",
-                description: "Ivory cropped t-shirt featuring 'The Life of a Showgirl' design.",
-                price: 1308.94,
-                quantity: 50,
-                national: "international",
-                style: "Photo",
-                medium: "T-Shirt",
-                sizes: ["S", "M", "L", "XL"],
-                tags: ["international", "Photo", "T-Shirt", "S", "M", "L", "XL"],
-                category: "681a0f1e2d3c4b5a6970f010",
-                artist: "681a0f1e2d3c4b5a6970f073",
-                imageUrl: ""
+                _id: "681a0f1e2d3c4b5a6970f082",
+                name: "Clash (แคลช)",
+                realName: "",
+                type: "band",
+                bio: "วงร็อกระดับตำนานของเมืองไทย สังกัด GMM Grammy ผ่านเวที Hot Wave เจ้าของเพลงฮิต 'เธอจะอยู่กับฉันตลอดไป', 'ขอเช็ดน้ำตา', 'เพลงสุดท้าย', 'เกินคำว่ารัก', 'อยู่ตรงนี้เสมอ' กลับมาอีกครั้งพร้อมอัลบั้ม 'ONE' ฉลองครบ 20 ปีวง",
+                style: "rock, pop",
+                socialLinks: ["https://www.instagram.com/clashrockband/"],
+                profilePic: "/artists/clash.jpg"
+            },
+            //Group/Idol
+            {
+                _id: "681a0f1e2d3c4b5a6970f083",
+                name: "Perses (เพอร์เซส)",
+                realName: "",
+                type: "group",
+                bio: "บอยกรุ๊ป 5 หนุ่มจากค่าย G'NEST สังกัด GMM Music แฟนคลับชื่อ 'PIECES' เจ้าของรางวัล JOOX Spotlight Group of the Year เตรียมเปิดตัวแท่งไฟทางการ (Official Light Stick) ปี 2025",
+                style: "T-pop, idol",
+                socialLinks: ["https://www.instagram.com/persesofficial/"],
+                profilePic: "/artists/perses.jpg"
             },
             {
-                _id: "681a0f1e2d3c4b5a6970f0a7",
-                name: "THE LIFE OF A SHOWGIRL IT'S FRIGHTENING BLACK CREWNECK SWEATSHIRT",
-                description: "Black long sleeve crewneck sweatshirt featuring Taylor Swift logo.",
-                price: 2126.8,
-                quantity: 35,
-                national: "international",
-                style: "Typography",
-                medium: "T-Shirt",
-                sizes: ["S", "M", "L", "XL"],
-                tags: ["international", "Typography", "T-Shirt", "S", "M", "L", "XL"],
-                category: "681a0f1e2d3c4b5a6970f010",
-                artist: "681a0f1e2d3c4b5a6970f073",
-                imageUrl: ""
+                _id: "681a0f1e2d3c4b5a6970f084",
+                name: "BUS because of you i shine (บัส)",
+                realName: "",
+                type: "group",
+                bio: "บอยกรุ๊ป 12 หนุ่มจากค่าย Sonray Music ภายใต้ TADA Entertainment แฟนคลับชื่อ 'BEUS' ศิลปินกลุ่มแรกของวงการ T-POP ที่ได้ขึ้นเวที K-POP M COUNTDOWN ที่เกาหลีใต้ เจ้าของเพลง 'เพราะคุณ I Shine', 'TRANSFORMER', 'แค่ไหนแค่นั้น'",
+                style: "T-pop, idol",
+                socialLinks: ["https://www.instagram.com/busbecauseofyouishine/"],
+                profilePic: "/artists/bus.jpg"
             },
             {
-                _id: "681a0f1e2d3c4b5a6970f0a8",
-                name: "THE LIFE OF A SHOWGIRL CREWNECK SWEATSHIRT BOX SET",
-                description: "Limited edition crewneck sweatshirt box set with exclusive track list graphic.",
-                price: 2126.8,
-                quantity: 20,
-                national: "international",
-                style: "Typography",
-                medium: "Vinyl",
-                sizes: [],
-                tags: ["international", "Typography", "Vinyl"],
-                category: "681a0f1e2d3c4b5a6970f014",
-                artist: "681a0f1e2d3c4b5a6970f073",
-                imageUrl: ""
-            },
-            {
-                _id: "681a0f1e2d3c4b5a6970f0a9",
-                name: "THE TORTURED POETS DEPARTMENT GRAY PHOTO LONG SLEEVE T-SHIRT",
-                description: "Gray long sleeve t-shirt with album graphic and tracklist.",
-                price: 1800,
-                quantity: 40,
-                national: "international",
-                style: "Photo",
-                medium: "T-Shirt",
-                sizes: ["S", "M", "L", "XL"],
-                tags: ["international", "Photo", "T-Shirt", "S", "M", "L", "XL"],
-                category: "681a0f1e2d3c4b5a6970f010",
-                artist: "681a0f1e2d3c4b5a6970f073",
-                imageUrl: ""
-            },
-            {
-                _id: "681a0f1e2d3c4b5a6970f0aa",
-                name: "THE TORTURED POETS DEPARTMENT GRAY HOODIE",
-                description: "Smoke gray hoodie with front pocket and album graphics.",
-                price: 1800,
-                quantity: 30,
-                national: "international",
-                style: "Typography",
-                medium: "T-Shirt",
-                sizes: ["S", "M", "L", "XL"],
-                tags: ["international", "Typography", "T-Shirt", "S", "M", "L", "XL"],
-                category: "681a0f1e2d3c4b5a6970f010",
-                artist: "681a0f1e2d3c4b5a6970f073",
-                imageUrl: ""
-            },
-            {
-                _id: "681a0f1e2d3c4b5a6970f0ab",
-                name: "Ghost Bieber Crewneck III",
-                description: "Crewneck จากคอลเลกชัน Ghost Bieber",
-                price: 1500,
-                quantity: 25,
-                national: "international",
-                style: "Typography",
-                medium: "T-Shirt",
-                sizes: ["S", "M", "L", "XL"],
-                tags: ["international", "Typography", "T-Shirt", "S", "M", "L", "XL"],
-                category: "681a0f1e2d3c4b5a6970f010",
-                artist: "681a0f1e2d3c4b5a6970f074",
-                imageUrl: ""
-            },
-            {
-                _id: "681a0f1e2d3c4b5a6970f0ac",
-                name: "Peaches T-Shirt (Green)",
-                description: "เสื้อยืดสีเขียวจากคอลเลกชัน Peaches",
-                price: 1100,
-                quantity: 40,
-                national: "international",
-                style: "Illustration",
-                medium: "T-Shirt",
-                sizes: ["S", "M", "L", "XL"],
-                tags: ["international", "Illustration", "T-Shirt", "S", "M", "L", "XL"],
-                category: "681a0f1e2d3c4b5a6970f010",
-                artist: "681a0f1e2d3c4b5a6970f074",
-                imageUrl: ""
-            },
-            {
-                _id: "681a0f1e2d3c4b5a6970f0ad",
-                name: "Peaches Tie Dye Hoodie",
-                description: "ฮู้ดดี้ tie-dye จากคอลเลกชัน Peaches",
-                price: 1900,
-                quantity: 30,
-                national: "international",
-                style: "Illustration",
-                medium: "T-Shirt",
-                sizes: ["S", "M", "L", "XL"],
-                tags: ["international", "Illustration", "T-Shirt", "S", "M", "L", "XL"],
-                category: "681a0f1e2d3c4b5a6970f010",
-                artist: "681a0f1e2d3c4b5a6970f074",
-                imageUrl: ""
-            },
-            {
-                _id: "681a0f1e2d3c4b5a6970f0ae",
-                name: "Peaches Nalgene",
-                description: "กระติกน้ำ Nalgene คอลเลกชัน Peaches",
-                price: 850,
-                quantity: 50,
-                national: "international",
-                style: "Photo",
-                medium: "Home & Living",
-                sizes: [],
-                tags: ["international", "Photo", "Home & Living"],
-                category: "681a0f1e2d3c4b5a6970f013",
-                artist: "681a0f1e2d3c4b5a6970f074",
-                imageUrl: ""
-            },
-            {
-                _id: "681a0f1e2d3c4b5a6970f0af",
-                name: "Unshatter Soundtrack Vinyl 2LP",
-                description: "แผ่นเสียง 2LP จากซาวด์แทร็กเรื่อง Unshatter",
-                price: 2200,
-                quantity: 20,
-                national: "international",
-                style: "Typography",
-                medium: "Vinyl",
-                sizes: [],
-                tags: ["international", "Typography", "Vinyl"],
-                category: "681a0f1e2d3c4b5a6970f014",
-                artist: "681a0f1e2d3c4b5a6970f075",
-                imageUrl: ""
-            },
-            {
-                _id: "681a0f1e2d3c4b5a6970f0b0",
-                name: "Long Sleeve Tee",
-                description: "เสื้อแขนยาวลาย Linkin Park",
-                price: 1300,
-                quantity: 45,
-                national: "international",
-                style: "Typography",
-                medium: "T-Shirt",
-                sizes: ["S", "M", "L", "XL"],
-                tags: ["international", "Typography", "T-Shirt", "S", "M", "L", "XL"],
-                category: "681a0f1e2d3c4b5a6970f010",
-                artist: "681a0f1e2d3c4b5a6970f075",
-                imageUrl: ""
-            },
-            {
-                _id: "681a0f1e2d3c4b5a6970f0b1",
-                name: "Women's Crewneck",
-                description: "เสื้อครูเชสเชอร์สำหรับผู้หญิง",
-                price: 1600,
-                quantity: 30,
-                national: "international",
-                style: "Photo",
-                medium: "T-Shirt",
-                sizes: ["S", "M", "L", "XL"],
-                tags: ["international", "Photo", "T-Shirt", "S", "M", "L", "XL"],
-                category: "681a0f1e2d3c4b5a6970f010",
-                artist: "681a0f1e2d3c4b5a6970f075",
-                imageUrl: ""
-            },
-            {
-                _id: "681a0f1e2d3c4b5a6970f0b2",
-                name: "Ladies White Cropped Tee",
-                description: "เสื้อครอปสีขาวสำหรับผู้หญิง",
-                price: 1200,
-                quantity: 40,
-                national: "international",
-                style: "Photo",
-                medium: "T-Shirt",
-                sizes: ["S", "M", "L", "XL"],
-                tags: ["international", "Photo", "T-Shirt", "S", "M", "L", "XL"],
-                category: "681a0f1e2d3c4b5a6970f010",
-                artist: "681a0f1e2d3c4b5a6970f075",
-                imageUrl: ""
-            },
-            {
-                _id: "681a0f1e2d3c4b5a6970f0b3",
-                name: "Hit Me Hard and Soft Tour Hoodie",
-                description: "ฮู้ดดี้ทัวร์คอนเสิร์ต Hit Me Hard and Soft",
-                price: 2100,
-                quantity: 35,
-                national: "international",
-                style: "Typography",
-                medium: "T-Shirt",
-                sizes: ["S", "M", "L", "XL"],
-                tags: ["international", "Typography", "T-Shirt", "S", "M", "L", "XL"],
-                category: "681a0f1e2d3c4b5a6970f010",
-                artist: "681a0f1e2d3c4b5a6970f076",
-                imageUrl: ""
-            },
-            {
-                _id: "681a0f1e2d3c4b5a6970f0b4",
-                name: "The Tour Gold T-Shirt",
-                description: "เสื้อยืด The Tour สีทอง",
-                price: 1100,
-                quantity: 50,
-                national: "international",
-                style: "Illustration",
-                medium: "T-Shirt",
-                sizes: ["S", "M", "L", "XL"],
-                tags: ["international", "Illustration", "T-Shirt", "S", "M", "L", "XL"],
-                category: "681a0f1e2d3c4b5a6970f010",
-                artist: "681a0f1e2d3c4b5a6970f076",
-                imageUrl: ""
-            },
-            {
-                _id: "681a0f1e2d3c4b5a6970f0b5",
-                name: "Dateback Black Longsleeve",
-                description: "เสื้อแขนยาว Dateback สีดำ",
-                price: 1400,
-                quantity: 40,
-                national: "international",
-                style: "Typography",
-                medium: "T-Shirt",
-                sizes: ["S", "M", "L", "XL"],
-                tags: ["international", "Typography", "T-Shirt", "S", "M", "L", "XL"],
-                category: "681a0f1e2d3c4b5a6970f010",
-                artist: "681a0f1e2d3c4b5a6970f076",
-                imageUrl: ""
-            },
-            {
-                _id: "681a0f1e2d3c4b5a6970f0b6",
-                name: "Avenged Sevenfold Nightmare Tee",
-                description: "เสื้อยืดอัลบั้ม Nightmare",
-                price: 1500,
-                quantity: 40,
-                national: "international",
-                style: "Illustration",
-                medium: "T-Shirt",
-                sizes: ["S", "M", "L", "XL"],
-                tags: ["international", "Illustration", "T-Shirt", "S", "M", "L", "XL"],
-                category: "681a0f1e2d3c4b5a6970f010",
-                artist: "681a0f1e2d3c4b5a6970f077",
-                imageUrl: ""
-            },
-            {
-                _id: "681a0f1e2d3c4b5a6970f0b7",
-                name: "Europe Tour LIBAD Tote",
-                description: "กระเป๋าผ้า LIBAD Tour",
-                price: 950,
-                quantity: 45,
-                national: "international",
-                style: "Typography",
-                medium: "Accessories",
-                sizes: [],
-                tags: ["international", "Typography", "Accessories"],
-                category: "681a0f1e2d3c4b5a6970f013",
-                artist: "681a0f1e2d3c4b5a6970f077",
-                imageUrl: ""
-            },
-            {
-                _id: "681a0f1e2d3c4b5a6970f0b8",
-                name: "Life Is But A Dream Vinyl",
-                description: "แผ่นเสียง Life Is But A Dream",
-                price: 2400,
-                quantity: 20,
-                national: "international",
-                style: "Photo",
-                medium: "Vinyl",
-                sizes: [],
-                tags: ["international", "Photo", "Vinyl"],
-                category: "681a0f1e2d3c4b5a6970f014",
-                artist: "681a0f1e2d3c4b5a6970f077",
-                imageUrl: ""
-            },
-            {
-                _id: "681a0f1e2d3c4b5a6970f0b9",
-                name: "End of World Trio",
-                description: "เซ็ตสินค้า End of World",
-                price: 1800,
-                quantity: 25,
-                national: "international",
-                style: "Illustration",
-                medium: "Accessories",
-                sizes: [],
-                tags: ["international", "Illustration", "Accessories"],
-                category: "681a0f1e2d3c4b5a6970f013",
-                artist: "681a0f1e2d3c4b5a6970f077",
-                imageUrl: ""
-            },
-            {
-                _id: "681a0f1e2d3c4b5a6970f0ba",
-                name: "Pride Clutch ป่านศรนารายณ์",
-                description: "กระเป๋า Clutch จากป่านศรนารายณ์",
-                price: 1500,
-                quantity: 30,
-                national: "thailand",
-                style: "Illustration",
-                medium: "Accessories",
-                sizes: [],
-                tags: ["thailand", "Illustration", "Accessories"],
-                category: "681a0f1e2d3c4b5a6970f013",
-                artist: "681a0f1e2d3c4b5a6970f078",
-                imageUrl: ""
-            },
-            {
-                _id: "681a0f1e2d3c4b5a6970f0bb",
-                name: "โคมไฟเซรามิก",
-                description: "โคมไฟเซรามิกลายไทย",
-                price: 6999,
-                quantity: 15,
-                national: "thailand",
-                style: "Photo",
-                medium: "Home & Living",
-                sizes: [],
-                tags: ["thailand", "Photo", "Home & Living"],
-                category: "681a0f1e2d3c4b5a6970f013",
-                artist: "681a0f1e2d3c4b5a6970f078",
-                imageUrl: ""
-            },
-            {
-                _id: "681a0f1e2d3c4b5a6970f0bc",
-                name: "พวงกุญแจลิเภา",
-                description: "พวงกุญแจจักสานย่านลิเภา สะท้อนเสน่ห์งานจักสานแบบดั้งเดิม",
-                price: 600,
-                quantity: 60,
-                national: "thailand",
-                style: "Illustration",
-                medium: "Accessories",
-                sizes: [],
-                tags: ["thailand", "Illustration", "Accessories"],
-                category: "681a0f1e2d3c4b5a6970f013",
-                artist: "681a0f1e2d3c4b5a6970f078",
-                imageUrl: ""
-            },
-            {
-                _id: "681a0f1e2d3c4b5a6970f0bd",
-                name: "กระเป๋าสานผักตบ รุ่นฟลอร่า M คละสี",
-                description: "กระเป๋าสานผักตบชวา บุด้วยผ้าฝ้ายลายดอกไม้สดใส",
-                price: 3933,
-                quantity: 20,
-                national: "thailand",
-                style: "Illustration",
-                medium: "Accessories",
-                sizes: [],
-                tags: ["thailand", "Illustration", "Accessories"],
-                category: "681a0f1e2d3c4b5a6970f013",
-                artist: "681a0f1e2d3c4b5a6970f078",
-                imageUrl: ""
-            },
-            {
-                _id: "681a0f1e2d3c4b5a6970f0be",
-                name: "กระเป๋า chaksarn รุ่น Mini Candy (สีธรรมชาติ-ดำ)",
-                description: "กระเป๋าแฟชั่นฝีมือคนไทยที่ดึงความเป็นไทยมาเป็นจุดเด่น",
-                price: 1000,
-                quantity: 35,
-                national: "thailand",
-                style: "Illustration",
-                medium: "Accessories",
-                sizes: [],
-                tags: ["thailand", "Illustration", "Accessories"],
-                category: "681a0f1e2d3c4b5a6970f013",
-                artist: "681a0f1e2d3c4b5a6970f079",
-                imageUrl: ""
-            },
-            {
-                _id: "681a0f1e2d3c4b5a6970f0bf",
-                name: "ผ้าพันคอ 4 ตะขอ",
-                description: "ผ้าฝ้ายทอมือ ย้อมสีด้วยสีจากธรรมชาติ",
-                price: 960,
-                quantity: 50,
-                national: "thailand",
-                style: "Typography",
-                medium: "Accessories",
-                sizes: [],
-                tags: ["thailand", "Typography", "Accessories"],
-                category: "681a0f1e2d3c4b5a6970f010",
-                artist: "681a0f1e2d3c4b5a6970f078",
-                imageUrl: ""
-            },
-            {
-                _id: "681a0f1e2d3c4b5a6970f0c0",
-                name: "ชุดแก้วช้างลายคราม",
-                description: "ชุดแก้วลายคราม",
-                price: 816,
-                quantity: 40,
-                national: "thailand",
-                style: "Illustration",
-                medium: "Home & Living",
-                sizes: [],
-                tags: ["thailand", "Illustration", "Home & Living"],
-                category: "681a0f1e2d3c4b5a6970f013",
-                artist: "681a0f1e2d3c4b5a6970f078",
-                imageUrl: ""
+                _id: "681a0f1e2d3c4b5a6970f085",
+                name: "4EVE (โฟร์อีฟ)",
+                realName: "",
+                type: "group",
+                bio: "เกิร์ลกรุ๊ป 7 สาวจากค่าย XOXO Entertainment แฟนคลับชื่อ 'EVE's' เจ้าของเพลงฮิต 'วาดไว้', 'ขยับ', 'TEST ME', 'วัดปะหล่ะ? TELL ME' และ 'Life Goes On' หนึ่งใน T-POP เกิร์ลกรุ๊ปที่มาแรงที่สุดในไทย",
+                style: "T-pop, girl group",
+                socialLinks: ["https://www.instagram.com/4eve_official/"],
+                profilePic: "/artists/4eve.jpg"
             }
         ]);
 
-        // --- E. SEED ORDERS ---
-        for (const o of mockOrders) {
-            const matchedUser = createdUsers.find(u => u.mockId === o.userId) || createdUsers[0];
-            await Order.create({
-                userId: matchedUser ? matchedUser.dbId : createdUsers[0].dbId,
-                items: (o.items || []).map(item => ({
-                    name: item.name,
-                    price: item.price,
-                    quantity: item.quantity
-                })),
-                totalAmount: o.totalAmount,
-                status: o.deliveryStatus || 'pending',
-                shippingProvider: o.shippingProvider,
-                shippingAddress: o.shippingAddress,
-                purchaseDate: o.createdAt ? new Date(o.createdAt) : new Date()
-            });
-        }
+        // Products
+        await upsertDocs(Product, [
+        //Solo artist
+            {
+                _id: "681a0f1e2d3c4b5a6970f020",
+                name: "NONT TANONT Official Light Stick",
+                description: "ไลต์สติกของทางการ CO-DESIGNED BY NONT TANONT จำหน่ายจริง 1,690 บาทที่ LOVEiS Shop โหมด ON > SLOW > QUICK > FLASH > OFF ใช้ถ่าน AAA 3 ก้อน",
+                price: 1690,
+                quantity: 60,
+                date: "2026-08-01T00:00:00.000+00:00",
+                tags: ["official", "lightstick", "fanmerch"],
+                category: "681a0f1e2d3c4b5a6970f013",
+                artist: "681a0f1e2d3c4b5a6970f070",
+                imageUrl: "https://static.wixstatic.com/media/3e5f79_b335950dc9804fb48dd2ded4f983e9a1~mv2.jpg/v1/fit/w_500,h_500,q_90/file.jpg"
+            },
+            {
+                _id: "681a0f1e2d3c4b5a6970f025",
+                name: "อัลบั้ม Cigarette Candy & Vanilla Sky (Vinyl Limited Edition Triple LP) - Nont Tanont",
+                description: "ไวนิลลิมิเต็ด Triple LP จำหน่ายจริง 3,500 บาท (+ค่าจัดส่ง 150 บาท) ที่ LOVEiS Shop/LINE Shopping รวบรวมเรื่องราว 10 ปีของ นนท์ ธนนท์",
+                price: 3500,
+                quantity: 20,
+                date: "2026-08-01T00:00:00.000+00:00",
+                tags: ["limited", "vinyl", "collectible"],
+                category: "681a0f1e2d3c4b5a6970f014",
+                artist: "681a0f1e2d3c4b5a6970f070",
+                imageUrl: "https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/5e/2b/94/5e2b94f0-77f5-62e3-8f3c-d5e76405b8bc/cover.jpg/600x600bb.jpg"
+            },
+            {
+                _id: "681a0f1e2d3c4b5a6970f021",
+                name: "Jeff Satur Official Light Stick V.2 (Air Traffic Control Tower)",
+                description: "ไลต์สติกของทางการ Jeff Satur โมเดล Air Traffic Control Tower ราคาอ้างอิง $135 จากอัลบั้มแรก Space Shuttle No.8",
+                price: 4600,
+                quantity: 30,
+                date: "2026-07-10T00:00:00.000+00:00",
+                tags: ["official", "lightstick", "new-arrival"],
+                category: "681a0f1e2d3c4b5a6970f013",
+                artist: "681a0f1e2d3c4b5a6970f071",
+                imageUrl: "https://www.funiki.nl/cdn/shop/files/7d6715e7-79df-2601-c536-661c0f283b64_1_ca6ed650-5c3c-4893-9e9e-b48c15298969.webp?v=1744374338"
+            },
+            {
+                _id: "681a0f1e2d3c4b5a6970f022",
+                name: "Jeff Satur Asia Tour Bucket Hat (Space Shuttle No.8)",
+                description: "หมวกบัคเก็ตของทางการ Jeff Satur Asia Tour คอลเลกชัน Space Shuttle No.8 ราคาอ้างอิง €50",
+                price: 2000,
+                quantity: 25,
+                date: "2026-07-15T00:00:00.000+00:00",
+                tags: ["official", "tour", "hat"],
+                category: "681a0f1e2d3c4b5a6970f011",
+                artist: "681a0f1e2d3c4b5a6970f071",
+                imageUrl: "https://www.funiki.nl/cdn/shop/files/30ece5cd-0c94-d34a-9352-6687727cbec2.webp?v=1725817232"
+            },
+            {
+                _id: "681a0f1e2d3c4b5a6970f026",
+                name: "Jeff Satur Asia Tour T-Shirt (Space Shuttle No.8)",
+                description: "เสื้อยืดทัวร์เอเชียของทางการ Jeff Satur คอลเลกชัน Space Shuttle No.8 Asia Tour ไซซ์ฟรี ราคาอ้างอิง €55",
+                price: 2200,
+                quantity: 40,
+                date: "2026-08-05T00:00:00.000+00:00",
+                tags: ["official", "tour", "tshirt"],
+                category: "681a0f1e2d3c4b5a6970f010",
+                artist: "681a0f1e2d3c4b5a6970f071",
+                imageUrl: "https://www.funiki.nl/cdn/shop/files/7b8ed8f4-b4a4-6878-148a-668772e12bfc.webp?v=1725816523"
+            },
+            {
+                _id: "681a0f1e2d3c4b5a6970f023",
+                name: "Bird Twenty Two (Color Vinyl) - เบิร์ด ธงไชย",
+                description: "แผ่นเสียงไวนิลสีของจริง อัลบั้ม Bird Twenty Two จำหน่าย 2,200 บาท ที่ Chiva Record หมวดเพลงไทยไทยของ GMM Grammy",
+                price: 2200,
+                quantity: 15,
+                date: "2026-07-25T00:00:00.000+00:00",
+                tags: ["vinyl", "collectible", "premium"],
+                category: "681a0f1e2d3c4b5a6970f014",
+                artist: "681a0f1e2d3c4b5a6970f073",
+                imageUrl: "https://chivarecord.com/wp-content/uploads/2022/12/LINE_ALBUM_2023.7.6_%E0%B9%92%E0%B9%93%E0%B9%90%E0%B9%97%E0%B9%90%E0%B9%96_9.webp"
+            },
+            {
+                _id: "681a0f1e2d3c4b5a6970f027",
+                name: "Dream For Love (Yellow Vinyl) - เบิร์ด ธงไชย",
+                description: "แผ่นเสียงไวนิลสีเหลือง ของจริง จำหน่าย 2,000 บาท ที่ Chiva Record เพลง รักเธอเท่าไหร่, เราคงจะได้พบกัน, เล่าสู่กันฟัง ร่วมกับคริสติน่า ใหม่ ลีเดีย อัญชลี",
+                price: 2000,
+                quantity: 15,
+                date: "2026-08-10T00:00:00.000+00:00",
+                tags: ["vinyl", "collectible"],
+                category: "681a0f1e2d3c4b5a6970f014",
+                artist: "681a0f1e2d3c4b5a6970f073",
+                imageUrl: "https://chivarecord.com/wp-content/uploads/2025/11/dream.webp"
+            },
+            {
+                _id: "681a0f1e2d3c4b5a6970f024",
+                name: "ยาดมภูวสูด - ของที่ระลึกงานสาธารณะสุข STATION",
+                description: "ยาดมของที่ระลึกสุดเอ็กซ์คลูซีฟ ออกแบบพิเศษสำหรับงาน Fan Meeting เปิดอัลบั้ม 'สาธารณะสุข' ของโจอี้ ภูวศิษฐ์ (สถานีกลางกรุงเทพอภิวัฒน์ 30 ก.ค. 2569)",
+                price: 99,
+                quantity: 100,
+                date: "2026-07-30T00:00:00.000+00:00",
+                tags: ["official", "souvenir", "new-arrival"],
+                category: "681a0f1e2d3c4b5a6970f013",
+                artist: "681a0f1e2d3c4b5a6970f072",
+                imageUrl: "https://storage-wp.thaipost.net/2026/08/JOEYSTATION_001-1.jpg"
+            },
+        //Band
+            {
+                _id: "681a0f1e2d3c4b5a6970f090",
+                name: "Three Man Down – อัลบั้ม '28' (Box Set CD)",
+                description: "Box Set CD อัลบั้มเต็มชุดที่สองของวง Three Man Down จำหน่ายจริง 790 บาท ที่ GMM Music Store / We Love Turntable ประกอบด้วย Growth Diary 54 หน้า, โปสเตอร์ขนาดใหญ่, โปสการ์ด 8 ใบ, Floppy Disc กระดาษ, MD Replica, กล่อง VHS กระดาษ และ CD 11 แทร็ค + CD Demo พิเศษ",
+                price: 790,
+                quantity: 30,
+                date: "2024-07-28T00:00:00.000+00:00",
+                tags: ["official", "cd", "boxset", "collectible"],
+                category: "681a0f1e2d3c4b5a6970f014",
+                artist: "681a0f1e2d3c4b5a6970f080",
+                imageUrl: "https://weloveturntable.com/wp-content/uploads/2024/10/DSCF4031.jpg"
+            },
+            {
+                _id: "681a0f1e2d3c4b5a6970f091",
+                name: "PARADOX UNPLUGGED T-Shirt",
+                description: "เสื้อยืดของทางการจากคอนเสิร์ต PARADOX UNPLUGGED จำหน่ายจริง 590 บาท ที่ GMM Music Store ผ้าฝ้าย Cotton 100% ใส่ได้ทุกฤดู",
+                price: 590,
+                quantity: 50,
+                date: "2024-09-27T00:00:00.000+00:00",
+                tags: ["official", "tshirt", "tour"],
+                category: "681a0f1e2d3c4b5a6970f010",
+                artist: "681a0f1e2d3c4b5a6970f081",
+                imageUrl: "/products/paradox-unplugged-tshirt.jpg"
+            },
+            {
+                _id: "681a0f1e2d3c4b5a6970f092",
+                name: "PARADOX UNPLUGGED Sweater",
+                description: "เสื้อสเวตเตอร์ของทางการจากคอนเสิร์ต PARADOX UNPLUGGED จำหน่ายจริง 950 บาท ที่ GMM Music Store เนื้อผ้าหนาอุ่นใส่สบาย",
+                price: 950,
+                quantity: 40,
+                date: "2024-09-27T00:00:00.000+00:00",
+                tags: ["official", "sweater", "tour"],
+                category: "681a0f1e2d3c4b5a6970f010",
+                artist: "681a0f1e2d3c4b5a6970f081",
+                imageUrl: "/products/paradox-unplugged-sweater.jpg"
+            },
+            {
+                _id: "681a0f1e2d3c4b5a6970f093",
+                name: "CLASH อัลบั้ม ONE T-Shirt",
+                description: "เสื้อยืดของทางการ CLASH (แคลช) ธีมอัลบั้ม 'ONE' ราคา 690 บาท มี 3 แบบให้เลือก พรีออเดอร์ที่ GMM Music Store ระยะเวลาการจองตามประกาศของร้าน",
+                price: 690,
+                quantity: 50,
+                date: "2026-08-10T00:00:00.000+00:00",
+                tags: ["official", "tshirt", "new-arrival"],
+                category: "681a0f1e2d3c4b5a6970f010",
+                artist: "681a0f1e2d3c4b5a6970f082",
+                imageUrl: "https://scontent.fbkk28-1.fna.fbcdn.net/v/t39.30808-6/654291590_1573408487941850_167124190072589168_n.jpg?stp=dst-jpg_tt6&cstp=mx1080x1080&ctp=p526x296&_nc_cat=110&ccb=1-7&_nc_sid=127cfc&_nc_ohc=ypNZT7dxViwQ7kNvwH3wjf9&_nc_oc=AdrjiPJZMno3f3TR8oxMngzZ_pW6gb-1yKwJOfw3pv6LtslQoqQapKMD56IaKTj3oC8&_nc_zt=23&_nc_ht=scontent.fbkk28-1.fna&_nc_gid=ASuxdh3S08ijCYDuzt_eVQ&_nc_ss=7b289&oh=00_AQG71YuOMhtOwpiRBQWFONXUjrWn_0OUCq_pDyhwJsvnWQ&oe=6A8752BC"
+            },
+            {
+                _id: "681a0f1e2d3c4b5a6970f094",
+                name: "Clash อัลบั้ม SoundShake T-SHIRT",
+                description: "เสื้อยืดของทางการ CLASH (แคลช) ธีมอัลบั้ม 'SoundShake' ราคา 690 บาท มี 3 แบบให้เลือก พรีออเดอร์ที่ GMM Music Store ระยะเวลาการจองตามประกาศของร้าน",
+                price: 690,
+                quantity: 100,
+                date: "2026-08-10T00:00:00.000+00:00",
+                tags: ["official", "tshirt", "new-arrival"],
+                category: "681a0f1e2d3c4b5a6970f010",
+                artist: "681a0f1e2d3c4b5a6970f082",
+                imageUrl: "https://scontent.fbkk28-1.fna.fbcdn.net/v/t39.30808-6/654291590_1573408487941850_167124190072589168_n.jpg?stp=dst-jpg_tt6&cstp=mx1080x1080&ctp=p526x296&_nc_cat=110&ccb=1-7&_nc_sid=127cfc&_nc_ohc=ypNZT7dxViwQ7kNvwH3wjf9&_nc_oc=AdrjiPJZMno3f3TR8oxMngzZ_pW6gb-1yKwJOfw3pv6LtslQoqQapKMD56IaKTj3oC8&_nc_zt=23&_nc_ht=scontent.fbkk28-1.fna&_nc_gid=5drCKWwYOVRkfs_S2WbX2g&_nc_ss=7b289&oh=00_AQHynvwnao9__9yVsCkvDd1nR4VclIdzmrhXm15Cg8ydiA&oe=6A8752BC"
+            },
+        //Group/Idol
+            {
+                _id: "681a0f1e2d3c4b5a6970f095",
+                name: "PERSES Official Light Stick",
+                description: "แท่งไฟของทางการ PERSES Version 1 ราคา 1,890 บาท เปิดพรีออเดอร์ 27 ส.ค. - 9 ก.ย. 2568 ผ่าน LINE SHOPPING @GMMSHOPS ชุดประกอบด้วยแท่งไฟ พร้อมอุปกรณ์ประกอบ",
+                price: 1890,
+                quantity: 40,
+                date: "2025-08-27T00:00:00.000+00:00",
+                tags: ["official", "lightstick", "new-arrival"],
+                category: "681a0f1e2d3c4b5a6970f013",
+                artist: "681a0f1e2d3c4b5a6970f083",
+                imageUrl: "/products/perses-lightstick.jpg"
+            },
+            {
+                _id: "681a0f1e2d3c4b5a6970f096",
+                name: "URTHE x PERSES เสื้อฮู้ด Oversize 'PIECES HOODIE'(พิมพ์ว่า URTHE x PERSES เสื้อฮู้ด Oversize)",
+                description: "เสื้อฮู้ดแขนยาวทรง Oversize จากคอลเลกชันพิเศษ URTHE x PERSES ในคอนเซ็ปต์ 'YOU ARE THE PIECES OF PERSES' ด้านหลังเด่นด้วยงานกราฟิกตัวอักษรขนาดใหญ่สไตล์สตรีทแฟชั่น",
+                price: 1290,
+                quantity: 30,
+                date: "2025-10-01T00:00:00.000+00:00",
+                tags: ["collab", "hoodie", "streetwear"],
+                category: "681a0f1e2d3c4b5a6970f010",
+                artist: "681a0f1e2d3c4b5a6970f083",
+                imageUrl: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTQb5WGnEPQNqpWy3HA-akMuU-BxZVM235y4COeAp7xlUOIdB7UHmXSpvw&s=10"
+            },
+            {
+                _id: "681a0f1e2d3c4b5a6970f097",
+                name: "BUS Official Light Stick 'BOB'",
+                description: "แท่งไฟของทางการ BUS because of you i shine ชื่อ 'BOB' (ตั้งโดย BUS เอง) ราคา 1,890 บาท เปิดจำหน่าย 24 พ.ย. 2568 ที่ ketchup SHOP มาพร้อมแอปพลิเคชันปรับสีไฟ",
+                price: 1890,
+                quantity: 50,
+                date: "2025-11-24T00:00:00.000+00:00",
+                tags: ["official", "lightstick", "new-arrival"],
+                category: "681a0f1e2d3c4b5a6970f013",
+                artist: "681a0f1e2d3c4b5a6970f084",
+                imageUrl: "https://scontent.fbkk28-1.fna.fbcdn.net/v/t39.30808-6/587961318_709362475547753_1488274372556956257_n.jpg?stp=dst-jpg_tt6&cstp=mx1200x1500&ctp=s640x640&_nc_cat=100&ccb=1-7&_nc_sid=833d8c&_nc_ohc=2J0vyvsEx9IQ7kNvwFibNX-&_nc_oc=AdplJmngOpWFwLlXadAENMCcjt8AuRRfQhBRTt58TIF0fvLGu7t1qdefxSgmZ0jULos&_nc_zt=23&_nc_ht=scontent.fbkk28-1.fna&_nc_gid=QQDsyAMAf5TMBvtMeMbx7w&_nc_ss=7b289&oh=00_AQF87xgwJLw_vX0VfCKXimSVmdcK29a0SbwVzY3aVxiylw&oe=6A8753B2"
+            },
+            {
+                _id: "681a0f1e2d3c4b5a6970f098",
+                name: "BUS The 1st Concert LIGHT THE WORLD T-Shirt",
+                description: "เสื้อยืดของทางการจากคอนเสิร์ตใหญ่ครั้งแรก 'BUS because of you i shine The 1st Concert LIGHT THE WORLD' จำหน่ายที่บูท TADA Merch",
+                price: 590,
+                quantity: 40,
+                date: "2025-03-14T00:00:00.000+00:00",
+                tags: ["official", "concert", "tshirt"],
+                category: "681a0f1e2d3c4b5a6970f010",
+                artist: "681a0f1e2d3c4b5a6970f084",
+                imageUrl: "/products/bus-concert-tshirt.jpg"
+            },
+            {
+                _id: "681a0f1e2d3c4b5a6970f099",
+                name: "4EVE ART TOY : Limited Blind Box Figure (แยกกล่อง)",
+                description: "ฟิกเกอร์กล่องสุ่มลิมิเต็ดของทางการ 4EVE จากค่าย XOXO Entertainment คาแรกเตอร์ 7 สาว มายด์, โจริญ, ตาออม, แฮนน่า, ฝ้าย, พั้นช์ และอ๊ะอาย มีตัว Rare และ Super Rare ให้ลุ้น ราคากล่องละ 750 บาท",
+                price: 750,
+                quantity: 100,
+                date: "2024-10-26T00:00:00.000+00:00",
+                tags: ["official", "art-toy", "blindbox", "collectible"],
+                category: "681a0f1e2d3c4b5a6970f013",
+                artist: "681a0f1e2d3c4b5a6970f085",
+                imageUrl: "/products/4eve-art-toy.jpg"
+            },
+            {
+                _id: "681a0f1e2d3c4b5a6970f09a",
+                name: "4EVE ART TOY : Limited Blind Box Figure (ยกกล่อง)",
+                description: "ชุดยกกล่อง 4EVE ART TOY Limited Blind Box Figure ครบชุดสะสม ลุ้นตัว Rare ได้แน่นอน ราคา 6,000 บาท",
+                price: 6000,
+                quantity: 10,
+                date: "2024-10-26T00:00:00.000+00:00",
+                tags: ["official", "art-toy", "blindbox", "collectible", "limited"],
+                category: "681a0f1e2d3c4b5a6970f013",
+                artist: "681a0f1e2d3c4b5a6970f085",
+                imageUrl: "/products/4eve-art-toy-case.jpg"
+            },
+            {
+                _id: "681a0f1e2d3c4b5a6970f09b",
+                name: "แท่งไฟ 4EVE รุ่นใหม่ (4EVE Light Stick New Version)",
+                description: "แท่งไฟของทางการ 4EVE รุ่นใหม่ ราคา 1,200 บาท วัสดุใหม่แข็งแรงทนทาน พร้อมแอปพลิเคชันปรับสีไฟ จำหน่ายทางออนไลน์และบูทในคอนเสิร์ต",
+                price: 1200,
+                quantity: 80,
+                date: "2024-10-26T00:00:00.000+00:00",
+                tags: ["official", "lightstick", "new-arrival"],
+                category: "681a0f1e2d3c4b5a6970f013",
+                artist: "681a0f1e2d3c4b5a6970f085",
+                imageUrl: "/products/4eve-lightstick.jpg"
+            }
+        ]);
 
-        console.log('[SUCCESS 🎉] Database seeded successfully with all products, users, and orders🍃');
+        // Carts
+        await upsertDocs(Cart, [
+            {
+                _id: "681a0f1e2d3c4b5a6970f030",
+                userId: "681a0f1e2d3c4b5a6970f001",
+                items: [{ productId: "681a0f1e2d3c4b5a6970f021", quantity: 1 }]
+            }
+        ]);
+
+        // Orders
+        await upsertDocs(Order, [
+            {
+                _id: "681a0f1e2d3c4b5a6970f040",
+                userId: "681a0f1e2d3c4b5a6970f001",
+                totalAmount: 5690,
+                status: "success",
+                shippingProvider: "Kerry",
+                shippingAddress: "123 สุขุมวิท กรุงเทพฯ 10110",
+                purchaseDate: "2026-07-13T10:00:00.000+00:00",
+                items: [
+                    {
+                        _id: "681a0f1e2d3c4b5a6970f041",
+                        productId: "681a0f1e2d3c4b5a6970f020",
+                        name: "NONT TANONT Official Light Stick",
+                        price: 1690,
+                        quantity: 1
+                    },
+                    {
+                        _id: "681a0f1e2d3c4b5a6970f042",
+                        productId: "681a0f1e2d3c4b5a6970f022",
+                        name: "Jeff Satur Asia Tour Bucket Hat (Space Shuttle No.8)",
+                        price: 2000,
+                        quantity: 2
+                    }
+                ]
+            }
+        ]);
+
+        // Payments
+        await upsertDocs(Payment, [
+            {
+                _id: "681a0f1e2d3c4b5a6970f050",
+                orderId: "681a0f1e2d3c4b5a6970f040",
+                amount: 5690,
+                method: "PromptPay",
+                status: "paid"
+            }
+        ]);
+
+        // Reviews
+        await upsertDocs(Review, [
+            {
+                _id: "681a0f1e2d3c4b5a6970f060",
+                userId: "681a0f1e2d3c4b5a6970f001",
+                productId: "681a0f1e2d3c4b5a6970f020",
+                rating: 5,
+                comment: "ไฟสว่างมาก ลายสวย ใช้งานง่าย คุ้มกับราคา"
+            }
+        ]);
+
+        console.log('[SUCCESS 🎉] Database seeded successfully🍃');
 
     } catch (err) {
         console.error('[ERROR ❌] Seeding failed:', err);
