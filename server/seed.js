@@ -9,20 +9,235 @@ const Cart = require('./models/Cart');
 const Order = require('./models/Order');
 const Payment = require('./models/Payment');
 const Review = require('./models/Review');
+const PromoCode = require('./models/PromoCode');
 const mongoose = require('mongoose');
+const bcrypt = require('bcrypt');
 
-// Upsert documents using _id filter
-async function upsertDocs(model, docs) {
-    const ops = (Array.isArray(docs) ? docs : [docs]).map((doc) => ({
-        updateOne: {
-            filter: { _id: doc._id },
-            update: { $set: doc },
-            upsert: true
-        }
-    }));
-    if (ops.length) await model.bulkWrite(ops);
-}
 
+// ==================== 2. SEED USERS DATA ====================
+const mockUsers = [
+  {
+    _id: 'usr-non',
+    email: 'non@gmail.com',
+    password: 'non1234',
+    firstName: 'นนท์',
+    lastName: 'ใจงาม',
+    phone: '0812345678',
+    address: '123 สุขุมวิท กรุงเทพฯ 10110',
+    role: 'customer',
+    employeeId: '',
+    memberSince: '2025-03-10',
+  },
+  {
+    _id: 'usr-touch',
+    email: 'touchy2003@gmail.com',
+    password: 'touch1234',
+    firstName: 'Touch',
+    lastName: 'Chy',
+    phone: '0809203752',
+    address: '45 ลาดพร้าว กรุงเทพฯ 10900',
+    role: 'customer',
+    employeeId: '',
+    memberSince: '2026-01-15',
+  },
+  {
+    _id: 'usr-earn',
+    email: 'earn.sarawut@gmail.com',
+    password: 'earn1234',
+    firstName: 'Earn',
+    lastName: 'Sarawut',
+    phone: '0864321987',
+    address: '789 สีลม ปทุมธานี 12000',
+    role: 'customer',
+    employeeId: '',
+    memberSince: '2025-12-20',
+  },
+  {
+    _id: 'usr-milk',
+    email: 'milk.pimchanok@gmail.com',
+    password: 'milk1234',
+    firstName: 'Milk',
+    lastName: 'Pimchanok',
+    phone: '0987654321',
+    address: '12 รัชดาภิเษก กรุงเทพฯ 10400',
+    role: 'customer',
+    employeeId: '',
+    memberSince: '2026-02-05',
+  },
+  {
+    _id: 'usr-mike',
+    email: 'mike.chayanit@gmail.com',
+    password: 'mike1234',
+    firstName: 'Mike',
+    lastName: 'Chayanit',
+    phone: '0819876543',
+    address: '56 ลาดพร้าว นนทบุรี 11000',
+    role: 'customer',
+    employeeId: '',
+    memberSince: '2026-03-14',
+  },
+  {
+    _id: 'usr-ploy',
+    email: 'ploy.apsara@gmail.com',
+    password: 'ploy1234',
+    firstName: 'Ploy',
+    lastName: 'Apsara',
+    phone: '0855556666',
+    address: '88 บางรัก กรุงเทพฯ 10500',
+    role: 'customer',
+    employeeId: '',
+    memberSince: '2026-04-01',
+  },
+  {
+    _id: 'usr-game',
+    email: 'game.wirayut@gmail.com',
+    password: 'game1234',
+    firstName: 'Game',
+    lastName: 'Wirayut',
+    phone: '0912345678',
+    address: '34 พระราม 9 กรุงเทพฯ 10310',
+    role: 'customer',
+    employeeId: '',
+    memberSince: '2026-05-22',
+  },
+  {
+    _id: 'usr-pim',
+    email: 'pim.nattaya@gmail.com',
+    password: 'pim1234',
+    firstName: 'Pim',
+    lastName: 'Nattaya',
+    phone: '0877778888',
+    address: '21 สุขุมวิท ชลบุรี 20000',
+    role: 'customer',
+    employeeId: '',
+    memberSince: '2026-06-10',
+  },
+  {
+    _id: 'usr-admin',
+    email: 'admin@merchroom.com',
+    password: 'admin1234',
+    firstName: 'ทีม',
+    lastName: 'แอดมิน',
+    phone: '0898765432',
+    address: 'สำนักงานใหญ่ กรุงเทพฯ',
+    role: 'admin',
+    employeeId: 'EMP-0001',
+    memberSince: '2024-11-01',
+  },
+  {
+    _id: 'usr-focus',
+    email: 'focusjustdoit@gmail.com',
+    password: 'focus1234',
+    firstName: 'Focus',
+    lastName: 'Niti',
+    phone: '0809203752',
+    address: 'bangkok',
+    role: 'admin',
+    employeeId: 'EMP-0002',
+    memberSince: '2024-11-01',
+  },
+  {
+    _id: 'usr-focus-admin',
+    email: 'focus@merchroom.com',
+    password: 'Test1234!',
+    firstName: 'Focus',
+    lastName: 'Admin',
+    phone: '0809203752',
+    address: 'สำนักงานใหญ่ กรุงเทพฯ',
+    role: 'admin',
+    employeeId: 'EMP-0003',
+    memberSince: '2024-11-01',
+  },
+  // Added Admin accounts (touch, heinz, tony, non) with @merchroom.com and same password (admin1234)
+  {
+    email: 'touch@merchroom.com',
+    password: 'admin1234',
+    firstName: 'Touch',
+    lastName: 'Admin',
+    phone: '0809203752',
+    address: 'สำนักงานใหญ่ กรุงเทพฯ',
+    role: 'admin',
+    employeeId: 'EMP-0004',
+    memberSince: '2024-11-01',
+  },
+  {
+    email: 'heinz@merchroom.com',
+    password: 'admin1234',
+    firstName: 'Heinz',
+    lastName: 'Admin',
+    phone: '0809203752',
+    address: 'สำนักงานใหญ่ กรุงเทพฯ',
+    role: 'admin',
+    employeeId: 'EMP-0005',
+    memberSince: '2024-11-01',
+  },
+  {
+    email: 'tony@merchroom.com',
+    password: 'admin1234',
+    firstName: 'Tony',
+    lastName: 'Admin',
+    phone: '0809203752',
+    address: 'สำนักงานใหญ่ กรุงเทพฯ',
+    role: 'admin',
+    employeeId: 'EMP-0006',
+    memberSince: '2024-11-01',
+  },
+  {
+    email: 'non@merchroom.com',
+    password: 'admin1234',
+    firstName: 'Non',
+    lastName: 'Admin',
+    phone: '0809203752',
+    address: 'สำนักงานใหญ่ กรุงเทพฯ',
+    role: 'admin',
+    employeeId: 'EMP-0007',
+    memberSince: '2024-11-01',
+  },
+];
+
+
+// ==================== 3. SEED ORDERS DATA ====================
+const mockOrders = [
+  {
+    _id: 'ORD-0001',
+    userId: 'usr-earn',
+    orderNumber: 'MR-20260108-100011',
+    items: [{ name: 'Bird Twenty Two (Color Vinyl)', price: 2200, quantity: 1 }],
+    totalAmount: 2200,
+    shippingProvider: 'Kerry Express',
+    shippingAddress: '789 สีลม ปทุมธานี 12000',
+    deliveryStatus: 'delivered',
+    createdAt: '2026-01-08T09:00:00+07:00',
+  },
+  {
+    _id: 'ORD-0002',
+    userId: 'usr-milk',
+    orderNumber: 'MR-20260114-100345',
+    items: [
+      { name: 'PARADOX UNPLUGGED T-Shirt', price: 590, quantity: 2 },
+      { name: 'PARADOX UNPLUGGED Sweater', price: 950, quantity: 1 },
+    ],
+    totalAmount: 2130,
+    shippingProvider: 'Flash Express',
+    shippingAddress: '12 รัชดาภิเษก กรุงเทพฯ 10400',
+    deliveryStatus: 'delivered',
+    createdAt: '2026-01-14T10:30:00+07:00',
+  },
+  {
+    _id: 'ORD-0003',
+    userId: 'usr-non',
+    orderNumber: 'MR-20260122-100789',
+    items: [{ name: '4EVE ART TOY : Limited Blind Box Figure (ยกกล่อง)', price: 6000, quantity: 1 }],
+    totalAmount: 6000,
+    shippingProvider: 'DHL Express',
+    shippingAddress: '123 สุขุมวิท กรุงเทพฯ 10110',
+    deliveryStatus: 'delivered',
+    createdAt: '2026-01-22T11:00:00+07:00',
+  },
+];
+
+
+// ==================== 4. MAIN SEED FUNCTION ====================
 async function runSeed() {
     await connectDB();
 
@@ -453,62 +668,69 @@ async function runSeed() {
         // Carts
         await upsertDocs(Cart, [
             {
-                _id: "681a0f1e2d3c4b5a6970f030",
-                userId: "681a0f1e2d3c4b5a6970f001",
-                items: [{ productId: "681a0f1e2d3c4b5a6970f021", quantity: 1 }]
+                _id: "681a0f1e2d3c4b5a6970f0be",
+                name: "กระเป๋า chaksarn รุ่น Mini Candy (สีธรรมชาติ-ดำ)",
+                description: "กระเป๋าแฟชั่นฝีมือคนไทยที่ดึงความเป็นไทยมาเป็นจุดเด่น",
+                price: 1000,
+                quantity: 35,
+                national: "thailand",
+                style: "Illustration",
+                medium: "Accessories",
+                sizes: [],
+                tags: ["thailand", "Illustration", "Accessories"],
+                category: "681a0f1e2d3c4b5a6970f013",
+                artist: "681a0f1e2d3c4b5a6970f079",
+                imageUrl: ""
+            },
+            {
+                _id: "681a0f1e2d3c4b5a6970f0bf",
+                name: "ผ้าพันคอ 4 ตะขอ",
+                description: "ผ้าฝ้ายทอมือ ย้อมสีด้วยสีจากธรรมชาติ",
+                price: 960,
+                quantity: 50,
+                national: "thailand",
+                style: "Typography",
+                medium: "Accessories",
+                sizes: [],
+                tags: ["thailand", "Typography", "Accessories"],
+                category: "681a0f1e2d3c4b5a6970f010",
+                artist: "681a0f1e2d3c4b5a6970f078",
+                imageUrl: ""
+            },
+            {
+                _id: "681a0f1e2d3c4b5a6970f0c0",
+                name: "ชุดแก้วช้างลายคราม",
+                description: "ชุดแก้วลายคราม",
+                price: 816,
+                quantity: 40,
+                national: "thailand",
+                style: "Illustration",
+                medium: "Home & Living",
+                sizes: [],
+                tags: ["thailand", "Illustration", "Home & Living"],
+                category: "681a0f1e2d3c4b5a6970f013",
+                artist: "681a0f1e2d3c4b5a6970f078",
+                imageUrl: ""
             }
         ]);
 
-        // Orders
-        await upsertDocs(Order, [
-            {
-                _id: "681a0f1e2d3c4b5a6970f040",
-                userId: "681a0f1e2d3c4b5a6970f001",
-                totalAmount: 5690,
-                status: "success",
-                shippingProvider: "Kerry",
-                shippingAddress: "123 สุขุมวิท กรุงเทพฯ 10110",
-                purchaseDate: "2026-07-13T10:00:00.000+00:00",
-                items: [
-                    {
-                        _id: "681a0f1e2d3c4b5a6970f041",
-                        productId: "681a0f1e2d3c4b5a6970f020",
-                        name: "NONT TANONT Official Light Stick",
-                        price: 1690,
-                        quantity: 1
-                    },
-                    {
-                        _id: "681a0f1e2d3c4b5a6970f042",
-                        productId: "681a0f1e2d3c4b5a6970f022",
-                        name: "Jeff Satur Asia Tour Bucket Hat (Space Shuttle No.8)",
-                        price: 2000,
-                        quantity: 2
-                    }
-                ]
-            }
-        ]);
-
-        // Payments
-        await upsertDocs(Payment, [
-            {
-                _id: "681a0f1e2d3c4b5a6970f050",
-                orderId: "681a0f1e2d3c4b5a6970f040",
-                amount: 5690,
-                method: "PromptPay",
-                status: "paid"
-            }
-        ]);
-
-        // Reviews
-        await upsertDocs(Review, [
-            {
-                _id: "681a0f1e2d3c4b5a6970f060",
-                userId: "681a0f1e2d3c4b5a6970f001",
-                productId: "681a0f1e2d3c4b5a6970f020",
-                rating: 5,
-                comment: "ไฟสว่างมาก ลายสวย ใช้งานง่าย คุ้มกับราคา"
-            }
-        ]);
+        // --- E. SEED ORDERS ---
+        for (const o of mockOrders) {
+            const matchedUser = createdUsers.find(u => u.mockId === o.userId) || createdUsers[0];
+            await Order.create({
+                userId: matchedUser ? matchedUser.dbId : createdUsers[0].dbId,
+                items: (o.items || []).map(item => ({
+                    name: item.name,
+                    price: item.price,
+                    quantity: item.quantity
+                })),
+                totalAmount: o.totalAmount,
+                status: o.deliveryStatus || 'pending',
+                shippingProvider: o.shippingProvider,
+                shippingAddress: o.shippingAddress,
+                purchaseDate: o.createdAt ? new Date(o.createdAt) : new Date()
+            });
+        }
 
         console.log('[SUCCESS 🎉] Database seeded successfully🍃');
 

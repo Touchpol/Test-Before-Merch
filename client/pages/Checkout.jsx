@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../src/context/CartContext';
 import Container from '../src/components/ui/Container';
 import Breadcrumb from '../src/components/ui/Breadcrumb';
+import { createOrder } from '../src/api/orders.api';
 import { createCharge } from '../src/api/payments.api';
 import { saveOrder } from '../src/utils/orderStorage';
 
@@ -176,7 +177,7 @@ export default function Checkout() {
   // Submit Handler: จัดการการยืนยันคำสั่งซื้อ
   // - หากเลือกบัตรเครดิต/เดบิต จะสร้าง Omise Card Token ฝั่ง client (Public Key)
   //   แล้วส่งไป Backend /api/payments/charge เพื่อเรียกเก็บเงินผ่าน Omise (Secret Key)
-  // - สร้าง Object คำสั่งซื้อใหม่ (newOrder) และบันทึกลง localStorage
+  // - สร้าง Object คำสั่งซื้อใหม่ (newOrder) และบันทึกลง localStorage และ Database (MongoDB)
   // - ล้างข้อมูลตะกร้าสินค้า (clearCart) และเปลี่ยนหน้าไปยังหน้าออเดอร์คอนเฟิร์ม
   // ----------------------------------------------------------------------
   const handleSubmit = async (e) => {
@@ -219,9 +220,27 @@ export default function Checkout() {
       formData.deliveryCity || formData.city,
       formData.deliveryState || formData.state,
       formData.deliveryZipCode || formData.zipCode,
-    ].filter(Boolean).join(', ');
+      formData.deliveryCountry || formData.country
+    ].filter(Boolean).join(', ') || 'Default Address';
 
-    // สร้างอ็อบเจกต์คำสั่งซื้อใหม่ ผ่าน module-scope helper (ไม่ใช้ impure calls ใน component)
+    // 1. Save to Database (MongoDB backend for Admin panel)
+    try {
+      const orderPayload = {
+        items: items.map((item) => ({
+          productId: item.id || item._id,
+          quantity: item.quantity,
+        })),
+        shippingAddress,
+        shippingProvider: 'Standard Delivery',
+        paymentMethod: paymentMethod,
+      };
+
+      await createOrder(orderPayload);
+    } catch (error) {
+      console.error('Failed to save order to database:', error);
+    }
+
+    // 2. สร้างอ็อบเจกต์คำสั่งซื้อใหม่ ผ่าน module-scope helper
     const newOrder = buildCheckoutOrder({
       items,
       total,
