@@ -15,6 +15,7 @@ const Cart = require('./models/Cart');
 const Order = require('./models/Order');
 const Payment = require('./models/Payment');
 const Review = require('./models/Review');
+const PromoCode = require('./models/PromoCode');
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 
@@ -37,8 +38,8 @@ const mockUsers = [
     _id: 'usr-touch',
     email: 'touchy2003@gmail.com',
     password: 'touch1234',
-    firstName: 'Touch',
-    lastName: 'Chy',
+    firstName: 'touchy',
+    lastName: '',
     phone: '0809203752',
     address: '45 ลาดพร้าว กรุงเทพฯ 10900',
     role: 'customer',
@@ -810,6 +811,17 @@ async function runSeed() {
                 purchaseDate: o.createdAt ? new Date(o.createdAt) : new Date()
             });
         }
+
+        // --- F. SEED PROMO CODES ---
+        await PromoCode.deleteMany({});
+        await PromoCode.create([
+            { code: 'NITIALLINHEART', discountPercent: 0.99, description: 'ลด 99% โค้ดพิเศษ NITIALLINHEART', isActive: true },
+            { code: 'ILOVEMERCHROOM', discountPercent: 0.20, description: 'ลด 20%', isActive: true },
+            { code: 'SPECIAL50', discountPercent: 0.50, description: 'ลด 50%', isActive: true },
+            { code: 'DISCOUNT10', discountPercent: 0.10, description: 'ลด 10%', isActive: true },
+            { code: 'ILIKECODE', discountPercent: 0.01, description: 'ลด 1%', isActive: true },
+            { code: 'ILIKECAKE', discountPercent: 0.99, description: 'ลด 99%', isActive: true }
+        ]);
 
         console.log('[SUCCESS 🎉] Database seeded successfully with all products, users, and orders🍃');
 

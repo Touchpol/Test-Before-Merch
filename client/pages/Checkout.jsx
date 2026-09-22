@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../src/context/CartContext';
 import Container from '../src/components/ui/Container';
 import Breadcrumb from '../src/components/ui/Breadcrumb';
+import { createOrder } from '../src/api/orders.api';
 
 // ค่าจัดส่งแบบคงที่
 const DELIVERY_FEE = 15;
@@ -79,8 +80,33 @@ export default function Checkout() {
   // - บันทึกลง localStorage ('my_orders') สำหรับจำลองระบบสั่งซื้อ
   // - ล้างข้อมูลตะกร้าสินค้า (clearCart) และเปลี่ยนหน้าไปยัง /orders
   // ----------------------------------------------------------------------
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+
+    try {
+      const shippingAddress = [
+        formData.addressLine,
+        formData.addressLine2,
+        formData.city,
+        formData.state,
+        formData.zipCode,
+        formData.country
+      ].filter(Boolean).join(', ') || 'Default Address';
+
+      const orderPayload = {
+        items: items.map((item) => ({
+          productId: item.id || item._id,
+          quantity: item.quantity,
+        })),
+        shippingAddress,
+        shippingProvider: 'Standard Delivery',
+        paymentMethod: paymentMethod,
+      };
+
+      await createOrder(orderPayload);
+    } catch (error) {
+      console.error('Failed to save order to database:', error);
+    }
 
     // สร้างข้อมูลคำสั่งซื้อใหม่ (Mock Order Data)
     const newOrder = {
