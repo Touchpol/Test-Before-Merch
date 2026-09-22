@@ -1,10 +1,12 @@
 const express = require('express');
 const PromoCode = require('../models/PromoCode');
-const { authUser } = require('../middleware/auth');
-const { adminOnly } = require('../middleware/adminOnly');
 
 const router = express.Router();
 
+/**
+ * GET /api/promos
+ * ดึงรายการโปรโมโค้ดที่เปิดใช้งานอยู่
+ */
 router.get('/', async (req, res, next) => {
   try {
     const promos = await PromoCode.find({ isActive: true }).select('code discountPercent description');
@@ -14,6 +16,10 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+/**
+ * POST /api/promos/validate
+ * ตรวจสอบความถูกต้องและคำนวณมูลค่าส่วนลด
+ */
 router.post('/validate', async (req, res, next) => {
   try {
     const { code, subtotal = 0 } = req.body;
@@ -43,35 +49,6 @@ router.post('/validate', async (req, res, next) => {
         newTotal: Math.max(0, Number(subtotal) - discountAmount),
       },
     });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.post('/', authUser, adminOnly, async (req, res, next) => {
-  try {
-    const promo = await PromoCode.create(req.body);
-    return res.status(201).json({ success: true, data: promo });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.patch('/:id', authUser, adminOnly, async (req, res, next) => {
-  try {
-    const promo = await PromoCode.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
-    if (!promo) return res.status(404).json({ success: false, message: 'Promo code not found' });
-    return res.json({ success: true, data: promo });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.delete('/:id', authUser, adminOnly, async (req, res, next) => {
-  try {
-    const promo = await PromoCode.findByIdAndDelete(req.params.id);
-    if (!promo) return res.status(404).json({ success: false, message: 'Promo code not found' });
-    return res.json({ success: true, message: 'Promo code deleted successfully' });
   } catch (err) {
     next(err);
   }

@@ -8,10 +8,6 @@ const ProductSchema = new mongoose.Schema({
     quantity: { type: Number, default: 0 },
     date: Date,
     tags: [String],
-    national: { type: String, enum: ['thailand', 'international'], default: 'thailand' },
-    style: { type: String, enum: ['Illustration', 'Photo', 'Typography'], default: 'Illustration' },
-    medium: { type: String, enum: ['T-Shirt', 'Vinyl', 'Accessories', 'Home & Living'], default: 'Accessories' },
-    sizes: [String], // ['S', 'M', 'L', 'XL']
     // เชื่อม relation ไปยัง Category และ Artist ผ่าน ObjectId
     category: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: true },
     artist: { type: mongoose.Schema.Types.ObjectId, ref: 'Artist' },

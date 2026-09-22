@@ -174,7 +174,7 @@ erDiagram
 ### 2.1 สไตล์สถาปัตยกรรมที่ใช้
 
 | แง่มุม | สิ่งที่ใช้ | เหตุผล |
-|---|---|---|
+| --- | --- | --- |
 | โครงระบบรวม | **Client–Server (จะเป็น 2-tier เมื่อ API พร้อม)** | frontend กับ backend แยกโฟลเดอร์ / แยก ESM-CommonJS ชัดเจน |
 | Frontend | **Component-Based Architecture** (SPA) | ทุกหน้าประกอบจาก component ใช้ซ้ำ |
 | State | **Shared State via Context** | ตะกร้าอยู่ที่ `CartContext` จุดเดียว |
@@ -269,7 +269,7 @@ Merchroom.zcode/
 ### 3.1 ตารางสรุป
 
 | # | Pattern | ประเภท | จุดที่ใช้ในโปรเจกต์ | ผลที่ได้ |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | 1 | **Provider / Global State (Context + Reducer-ish updater)** | Behavioral | `CartContext.jsx` | state ตะกร้าใช้ร่วมกันทุกหน้าโดยไม่ต้อง prop drilling |
 | 2 | **Custom Hook (Facade ของ Context)** | Creational/封装 | `useCart()` | ซ่อนรายละเอียด Context + บังคับใช้ภายใต้ Provider เท่านั้น (throw error ถ้าใช้นอก) |
 | 3 | **Memoization (Observer-like re-render)** | Behavioral | `useMemo` ใน CartProvider, `useCallback` ทุก action | คำนวณ `cartCount`/`cartTotal` ใหม่เมื่อ items เปลี่ยนเท่านั้น |
@@ -313,6 +313,7 @@ classDiagram
 ```
 
 **เหตุผลเชิงออกแบบ** — ใน `CartContext.jsx`:
+
 - ทุก action ถูก `useCallback` ครอบ → reference คงที่ ทำให้ `useMemo` ของ `value` ไม่สร้าง object ใหม่โดยไม่จำเป็น → หน้าที่ consume ไม่ re-render ฟรี ๆ
 - `cartCount` / `cartTotal` เป็น **derived state** (คำนวณจาก items ด้วย `useMemo`) ไม่เก็บ state ซ้ำ — กัน state ไม่ sync
 - `addToCart` ทำ **immutable update** (`map`/`filter`/spread) ตามหลัก React state

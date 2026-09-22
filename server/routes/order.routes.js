@@ -9,5 +9,4 @@ router.get('/', authUser, adminOnly, controller.getAllOrders);
 router.get('/stats', authUser, adminOnly, controller.getOrderStats);
 router.get('/:id', authUser, controller.getOrderById);
 router.patch('/:id/status', authUser, adminOnly, controller.updateStatus);
-router.patch('/:id/cancel', authUser, controller.cancelOrder);
 module.exports = router;

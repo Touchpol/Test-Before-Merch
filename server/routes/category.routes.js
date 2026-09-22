@@ -6,9 +6,15 @@ const { adminOnly } = require('../middleware/adminOnly');
 
 const router = express.Router();
 
+/**
+ * GET /api/categories
+ * ดึงรายการหมวดหมู่แบบ Standard และโครงสร้างหมวดหมู่หลัก (ThaiHeritage vs PopCulture: Thailand / International)
+ */
 router.get('/', async (req, res, next) => {
   try {
     const standardCategories = await Category.find().sort({ name: 1 });
+
+    // โครงสร้างหมวดหมู่แบบกลุ่มตามความต้องการของระบบ Merchroom
     const hierarchy = {
       ThaiHeritage: {
         name: 'Thai Heritage',
@@ -34,31 +40,14 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+/**
+ * POST /api/categories (Admin Only)
+ */
 router.post('/', authUser, adminOnly, async (req, res, next) => {
   try {
     const { name, slug, description } = req.body;
     const category = await Category.create({ name, slug, description });
     return res.status(201).json({ success: true, data: category });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.patch('/:id', authUser, adminOnly, async (req, res, next) => {
-  try {
-    const category = await Category.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
-    if (!category) return res.status(404).json({ success: false, message: 'Category not found' });
-    return res.json({ success: true, data: category });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.delete('/:id', authUser, adminOnly, async (req, res, next) => {
-  try {
-    const category = await Category.findByIdAndDelete(req.params.id);
-    if (!category) return res.status(404).json({ success: false, message: 'Category not found' });
-    return res.json({ success: true, message: 'Category deleted successfully' });
   } catch (err) {
     next(err);
   }

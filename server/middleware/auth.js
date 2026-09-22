@@ -16,4 +16,16 @@ const authUser = (req, res, next) => {
   }
 };
 
-module.exports = { authUser };
+const optionalAuth = (req, res, next) => {
+  const token = req.cookies.accessToken;
+  if (!token) return next();
+  try {
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = { _id: decodedToken.userId };
+  } catch (err) {
+    // invalid/expired token — continue as guest
+  }
+  next();
+};
+
+module.exports = { authUser, optionalAuth };

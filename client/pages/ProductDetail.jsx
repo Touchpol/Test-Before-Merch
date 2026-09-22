@@ -1,7 +1,8 @@
 // ไฟล์: client/pages/ProductDetail.jsx
 // หน้าแสดงรายละเอียดสินค้า (Product Detail Page)
-
-import { useEffect, useState } from 'react';
+// เรียกมาจาก: App.jsx ผ่าน Route path="/productDetail/:id"
+// แหล่งข้อมูล: ค้นหาข้อมูลสินค้าตาม id จาก src/data/product.js และดึงรีวิวจาก src/data/reviews.js
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   BadgeCheck,
@@ -12,9 +13,7 @@ import {
   Plus,
   Star,
 } from 'lucide-react';
-
-import { getPublicProduct } from '../src/api/products.api';
-import { products as fallbackProducts } from '../src/data/product';
+import { products } from '../src/data/product';
 import { mockReviews } from '../src/data/reviews';
 import { categoryFilter } from '../src/data/sections';
 import { useCart } from '../src/context/CartContext';
@@ -52,15 +51,28 @@ const FAQS = [
   },
 ];
 
-const baht = (value) => `฿${Number(value || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}`;
+const baht = (value) => `฿${value.toLocaleString('th-TH', { minimumFractionDigits: 2 })}`;
 
+// หน้ารายละเอียดสินค้า: แสดงรูปภาพ ข้อมูลสินค้า ตัวเลือกไซซ์/สี และสินค้าที่เกี่ยวข้อง
 export default function ProductDetail() {
+  // ดึง productId จาก URL param เช่น /productDetail/01th
   const { productId } = useParams();
   const navigate = useNavigate();
   const { addToCart } = useCart();
 
-  const [product, setProduct] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // ค้นหาสินค้าจาก data array ตาม id
+  const product = products.find((item) => String(item.id) === String(productId));
+
+  // แมป category ย้อนกลับจาก suffix รหัสสินค้าเพื่อทำ Breadcrumb ลิงก์กลับหน้าเดิม
+  const backToCat = (() => {
+    if (!product) return null;
+    if (product.id.endsWith('th')) return 'thai-band';
+    if (product.id.endsWith('en')) return 'pop-culture';
+    if (product.id.endsWith('hr')) return 'thai-heritage';
+    return null;
+  })();
+  const backTo = backToCat ? `/products?cat=${backToCat}` : '/products';
+  const categoryLabel = backToCat ? categoryFilter[backToCat]?.label : 'Products';
 
   const [size, setSize] = useState('Large');
   const [color, setColor] = useState('black');
@@ -68,46 +80,7 @@ export default function ProductDetail() {
   const [activeTab, setActiveTab] = useState('reviews');
   const [galleryIndex, setGalleryIndex] = useState(0);
 
-  // Fetch product from database API with fallback to static mock data
-  useEffect(() => {
-    setLoading(true);
-    getPublicProduct(productId)
-      .then((res) => {
-        if (res.success && res.product) {
-          const p = res.product;
-          const fallback = fallbackProducts.find(f => f.name.toLowerCase() === p.name.toLowerCase()) || fallbackProducts[0];
-          const imgSrc = (p.imageUrl && p.imageUrl.length > 5) ? p.imageUrl : fallback?.image;
-          setProduct({
-            ...p,
-            id: p._id || p.id,
-            brand: p.brand || p.artist?.name || fallback?.brand || 'Merchroom',
-            image: imgSrc,
-            imageUrl: imgSrc,
-            national: p.national || fallback?.national || 'Thailand',
-            style: p.style || fallback?.style || 'Illustration',
-            medium: p.medium || fallback?.medium || 'Accessories',
-            sizes: p.sizes?.length ? p.sizes : (fallback?.sizes || []),
-          });
-        } else {
-          const found = fallbackProducts.find((item) => String(item.id) === String(productId));
-          setProduct(found || null);
-        }
-      })
-      .catch(() => {
-        const found = fallbackProducts.find((item) => String(item.id) === String(productId) || String(item._id) === String(productId));
-        setProduct(found || null);
-      })
-      .finally(() => setLoading(false));
-  }, [productId]);
-
-  if (loading) {
-    return (
-      <Container className="py-20 text-center">
-        <p className="text-muted">Loading product details...</p>
-      </Container>
-    );
-  }
-
+  // ดักกรณีพิมพ์ id มั่วแล้วหาของไม่เจอ แสดงหน้าแจ้งเตือนพร้อมปุ่มพากลับ
   if (!product) {
     return (
       <Container className="py-20 text-center">
@@ -117,22 +90,14 @@ export default function ProductDetail() {
     );
   }
 
-  const backToCat = (() => {
-    if (!product) return null;
-    if (String(product.id).endsWith('th')) return 'thai-band';
-    if (String(product.id).endsWith('en')) return 'pop-culture';
-    if (String(product.id).endsWith('hr')) return 'thai-heritage';
-    return null;
-  })();
-  const backTo = backToCat ? `/products?cat=${backToCat}` : '/products';
-  const categoryLabel = backToCat ? categoryFilter[backToCat]?.label : 'Products';
-
+  // เตรียมรูปภาพของสินค้า (รองรับทั้ง images array และรูปเดี่ยว image/imageUrl)
   const productImages = Array.isArray(product.images) && product.images.length > 0
     ? product.images
     : [product.image || product.imageUrl].filter(Boolean);
   const hasMultipleImages = productImages.length > 1;
   const mainImage = productImages[galleryIndex] || productImages[0] || '';
 
+  // ตรวจสอบว่าสินค้าเป็นเครื่องแต่งกายที่ต้องเลือกไซซ์หรือไม่
   const isApparel = (() => {
     if (Array.isArray(product.sizes) && product.sizes.length > 0) return true;
     const name = (product.name || '').toLowerCase();
@@ -149,16 +114,18 @@ export default function ProductDetail() {
     ? product.colors
     : null;
 
-  const sameBrand = fallbackProducts.filter((item) => item.brand === product.brand);
+  // แนะนำสินค้าที่เกี่ยวข้อง: เรียงจากแบรนด์เดียวกันก่อน แล้วตามด้วยหมวดหมู่เดียวกัน
+  const sameBrand = products.filter((item) => item.brand === product.brand);
   const related = [
-    ...sameBrand.filter((item) => String(item.id) !== String(product.id)),
-    ...fallbackProducts.filter(
-      (item) => String(item.id) !== String(product.id) && item.brand !== product.brand,
+    ...sameBrand.filter((item) => item.id !== product.id),
+    ...products.filter(
+      (item) => item.id !== product.id && item.brand !== product.brand && item.id.endsWith(product.id.slice(-2)),
     ),
   ].slice(0, 4);
 
   return (
     <Container className="py-10">
+      {/* แถบนำทาง Breadcrumb ย้อนกลับไปยังหมวดหมู่หลักของสินค้า */}
       <Breadcrumb
         items={[
           { label: 'Home', to: '/' },
@@ -168,6 +135,7 @@ export default function ProductDetail() {
       />
 
       <div className="mt-6 grid items-start gap-10 lg:grid-cols-2">
+        {/* แกลเลอรีรูปภาพ: หากมีหลายรูปจะแสดงแถบ Thumbnails ด้านข้าง */}
         <div className="flex gap-4">
           {hasMultipleImages && (
             <div className="flex flex-col gap-3">
@@ -188,6 +156,7 @@ export default function ProductDetail() {
             </div>
           )}
 
+          {/* กรอบรูปภาพใหญ่ของสินค้า */}
           <div className="flex-1 overflow-hidden rounded-btn bg-white">
             {mainImage ? (
               <img
@@ -203,6 +172,7 @@ export default function ProductDetail() {
           </div>
         </div>
 
+        {/* ข้อมูลสินค้า: ชื่อ ราคา คำบรรยาย ตัวเลือกขนาด สี และปุ่มหยิบใส่ตะกร้า */}
         <div>
           {product.brand && (
             <p className="text-base font-semibold uppercase text-primary">{product.brand}</p>
@@ -218,6 +188,7 @@ export default function ProductDetail() {
             {product.description}
           </p>
 
+          {/* เลือกสีสินค้า (แสดงเฉพาะเมื่อมีตัวเลือกสีระบุไว้จริง) */}
           {availableColors && (
             <div className="mt-6">
               <p className="text-sm font-semibold">Choose Colors</p>
@@ -240,6 +211,7 @@ export default function ProductDetail() {
             </div>
           )}
 
+          {/* เลือกไซซ์สินค้า (แสดงเฉพาะสินค้าประเภทเครื่องแต่งกาย) */}
           {isApparel && (
             <div className="mt-6">
               <p className="text-sm font-semibold">Choose Size</p>
@@ -263,6 +235,7 @@ export default function ProductDetail() {
             </div>
           )}
 
+          {/* ตัวปรับจำนวนสินค้า (+/- ล็อคขั้นต่ำ 1 ชิ้น) และปุ่มกดใส่ตะกร้า */}
           <div className="mt-8 flex flex-col gap-4 sm:flex-row">
             <div className="flex h-btn-lg items-center gap-5 rounded-pill border border-ink/20 px-5">
               <button
